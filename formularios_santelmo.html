@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Santelmo — Lançamentos</title>
+
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  CONFIGURAÇÃO FIREBASE — preencha com os dados do seu projeto ║
+  ╚══════════════════════════════════════════════════════════════╝
+  1. Acesse https://console.firebase.google.com
+  2. Selecione seu projeto → Configurações → Geral
+  3. Role até "Seus apps" → copie o firebaseConfig
+  4. Cole os valores abaixo
+-->
+<script>
+const FIREBASE_CONFIG = {
+  apiKey:            "COLE_AQUI",
+  authDomain:        "COLE_AQUI",
+  projectId:         "COLE_AQUI",
+  storageBucket:     "COLE_AQUI",
+  messagingSenderId: "COLE_AQUI",
+  appId:             "COLE_AQUI"
+};
+</script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --verde:#1B4D35;--verde-mid:#2D6B4A;--verde-light:#ECFDF5;--verde-border:#A7F3D0;
+  --amber:#D97706;--amber-light:#FFFBEB;--red:#DC2626;--red-light:#FEF2F2;
+  --ink:#111827;--muted:#6B7280;--bg:#F0F4F2;--card:#FFFFFF;--border:#D1FAE5;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh}
+.app{max-width:680px;margin:0 auto}
+.header{background:var(--verde);color:white;padding:14px 16px;border-radius:12px 12px 0 0}
+.header h1{font-size:15px;font-weight:600}
+.header p{font-size:11px;opacity:.7;margin-top:2px;font-family:var(--mono)}
+.tabs{display:flex;overflow-x:auto;background:#163D2A;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{flex:none;padding:10px 13px;font-size:12px;font-weight:500;color:rgba(255,255,255,.6);background:transparent;border:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
+.tab-btn.active{color:#7DD8A8;border-bottom-color:#7DD8A8;background:rgba(125,216,168,.08)}
+.content{background:white;border-radius:0 0 12px 12px;min-height:500px;padding:16px}
+
+/* Carregamento */
+.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px;color:var(--muted)}
+.spinner{width:32px;height:32px;border:3px solid var(--verde-border);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-screen{background:var(--red-light);border:1px solid #FCA5A5;border-radius:10px;padding:16px;color:var(--red);font-size:13px}
+
+/* Formulário */
+.form-group{margin-bottom:14px}
+label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--ink);background:#FAFFF9;outline:none;transition:border .15s;font-family:var(--sans)}
+input:focus,select:focus{border-color:var(--verde);background:white}
+input[readonly]{background:#F3F4F6;color:var(--muted);cursor:default;border-color:#E5E7EB}
+.row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stitle{font-size:11px;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 6px;border-top:1px solid #E5F7EE;margin-top:8px}
+.stitle:first-of-type{border-top:none;margin-top:0;padding-top:0}
+.btn-sub{width:100%;padding:12px;background:var(--verde);color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px;font-family:var(--sans);display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s}
+.btn-sub:hover{background:var(--verde-mid)}
+.btn-sub:disabled{background:#9CA3AF;cursor:not-allowed}
+.btn-sub.amber{background:var(--amber)}
+.btn-sub.amber:hover{background:#B45309}
+.ibox{background:var(--verde-light);border:1px solid var(--verde-border);border-radius:8px;padding:10px 12px;font-size:12px;color:#065F46;margin-bottom:14px}
+.badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600}
+.br{background:#DBEAFE;color:#1E40AF}
+.bp{background:#FEF3C7;color:#92400E}
+.bk{background:var(--verde-light);color:#065F46}
+.bi{background:#F3F4F6;color:var(--muted)}
+.bs{background:#FEF3C7;color:#92400E}
+.alr{font-size:11px;color:var(--red);margin-top:3px}
+
+/* Trava */
+.trava-box{border:2px solid #FCA5A5;border-radius:12px;padding:20px;text-align:center;background:var(--red-light);margin-top:8px}
+.trava-title{font-size:15px;font-weight:700;color:var(--red);margin-bottom:6px}
+.trava-sub{font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.trava-meta{font-size:11px;color:var(--muted);background:#F3F4F6;border-radius:6px;padding:5px 10px;display:inline-block}
+.btn-override{padding:8px 16px;background:transparent;border:1.5px solid #FCA5A5;border-radius:8px;color:var(--red);font-size:12px;font-weight:500;cursor:pointer;margin-top:12px}
+.data-badge{display:inline-flex;align-items:center;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:6px 10px;font-size:12px;color:#1D4ED8;margin-bottom:14px}
+.data-ontem{background:var(--amber-light);border-color:#FDE68A;color:#92400E}
+.data-hoje{background:var(--verde-light);border-color:var(--verde-border);color:#065F46}
+
+/* Lote cards */
+.lote-card{border:1px solid #E5F7EE;border-radius:10px;padding:12px 14px;margin-bottom:8px;background:#FAFFF9}
+.btn-sm{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid;font-family:var(--sans)}
+.bd{background:transparent;border-color:#FCA5A5;color:var(--red)}
+.bsec{background:transparent;border-color:#D1D5DB;color:#374151}
+.btn-add{width:100%;padding:10px;background:transparent;border:1.5px dashed #6EE7B7;border-radius:8px;color:var(--verde);font-size:13px;font-weight:500;cursor:pointer;margin-top:4px;font-family:var(--sans)}
+.btn-add:hover{background:var(--verde-light)}
+.aform{border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-top:12px;background:#F0FDF4}
+.pbar{height:4px;background:#E5E7EB;border-radius:2px;margin-top:6px}
+.pfill{height:100%;border-radius:2px;background:var(--verde)}
+.wbig{font-size:20px;font-weight:700;color:var(--verde)}
+.ropt{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;font-size:14px;font-weight:500;color:#374151;background:#FAFFF9}
+.ropt.sel{border-color:var(--verde);background:var(--verde-light);color:var(--verde)}
+.lirow{display:grid;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #F3F4F6}
+.lirow:last-child{border-bottom:none}
+.trow{display:grid;grid-template-columns:1fr 100px 100px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #F3F4F6}
+.trow:last-child{border-bottom:none}
+.prow{border:1.5px solid #E5F7EE;border-radius:10px;padding:12px;margin-bottom:8px;background:#FAFFF9}
+.sbloco{border:1.5px solid #FDE68A;border-radius:10px;padding:12px;margin-bottom:8px;background:#FFFDF5}
+.stot{margin-top:8px;padding:7px 10px;background:#FEF3C7;border-radius:6px;font-size:12px;color:#92400E;font-weight:500}
+.aviario-selector{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.aviario-card{border:2px solid #E5E7EB;border-radius:12px;padding:14px;cursor:pointer;text-align:center;transition:all .2s;background:#FAFAFA;position:relative}
+.aviario-card.ag{border-color:var(--verde);background:var(--verde-light)}
+.aviario-card.as{border-color:var(--amber);background:var(--amber-light)}
+.aviario-icon{font-size:24px;margin-bottom:6px}
+.aviario-title{font-size:13px;font-weight:600}
+.aviario-desc{font-size:11px;color:var(--muted);margin-top:2px}
+.chk{position:absolute;top:7px;right:7px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:white}
+.chk-g{background:var(--verde)}
+.chk-s{background:var(--amber)}
+.divider{height:1px;background:#E5F7EE;margin:14px 0}
+.hint-box{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;font-size:12px;color:#64748B;line-height:1.5}
+.fnote{background:var(--amber-light);border:1px solid #FED7AA;border-radius:8px;padding:10px 12px;font-size:11px;color:#9A3412;margin-top:12px;line-height:1.5}
+.gen-tab{display:inline-block;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:#374151;margin-right:6px;margin-bottom:8px;background:#FAFFF9}
+.gen-tab.active{background:var(--verde);color:white;border-color:var(--verde)}
+.ctbl{width:100%;border-collapse:collapse;font-size:13px}
+.ctbl th{background:var(--verde-light);color:#065F46;font-weight:600;padding:6px 10px;text-align:left;font-size:11px;text-transform:uppercase}
+.ctbl td{padding:5px 10px;border-bottom:1px solid #F3F4F6}
+.tipo-toggle{display:flex;gap:8px;margin-top:4px}
+.tbtn{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);background:#FAFFF9;color:#374151;transition:all .15s;font-family:var(--sans)}
+.tbtn.tg{border-color:var(--verde);background:var(--verde-light);color:var(--verde)}
+.tbtn.ts{border-color:var(--amber);background:var(--amber-light);color:#92400E}
+.sync-btn{width:100%;padding:10px;background:transparent;border:1.5px solid var(--verde-border);border-radius:8px;color:var(--verde);font-size:13px;font-weight:500;cursor:pointer;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--sans)}
+.sync-btn:hover{background:var(--verde-light)}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:white;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320px;text-align:center}
+.toast.show{opacity:1}
+
+/* Login */
+.login-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0F2D1E 0%,#1B4D35 60%,#2D6B4A 100%);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.login-card{background:white;border-radius:18px;padding:32px 28px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo h2{font-family:var(--serif,serif);font-size:22px;color:var(--verde);margin-top:8px}
+.login-logo p{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:4px}
+.login-field{margin-bottom:14px}
+.login-field label{display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.login-field input{width:100%;padding:10px 13px;border:1.5px solid #E5E7EB;border-radius:9px;font-size:14px;outline:none;transition:border .15s;font-family:var(--sans)}
+.login-field input:focus{border-color:var(--verde)}
+.login-erro{font-size:12px;color:var(--red);background:var(--red-light);border:1px solid #FCA5A5;border-radius:7px;padding:8px 12px;margin-bottom:12px;display:none}
+.btn-login{width:100%;padding:12px;background:var(--verde);color:white;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-login:hover{background:var(--verde-mid)}
+.btn-login:disabled{background:#9CA3AF;cursor:not-allowed}
+.user-chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:4px 10px 4px 8px;display:flex;align-items:center;gap:6px;font-size:11px;color:white;font-family:var(--mono)}
+.btn-logout{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:7px;padding:5px 11px;font-size:11px;font-weight:500;color:white;cursor:pointer;font-family:var(--sans);transition:background .15s}
+.btn-logout:hover{background:rgba(255,255,255,.22)}
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div class="login-bg" id="login-bg">
+  <div class="login-card">
+    <div class="login-logo">
+      <div style="font-size:36px">🐔</div>
+      <h2>Santelmo Alimentos</h2>
+      <p>Sistema de lançamentos</p>
+    </div>
+    <div class="login-field">
+      <label>E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')entrar()">
+    </div>
+    <div class="login-field">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="••••••••" onkeydown="if(event.key==='Enter')entrar()">
+    </div>
+    <div class="login-erro" id="login-erro"></div>
+    <button class="btn-login" id="btn-login" onclick="entrar()">Entrar</button>
+  </div>
+</div>
+
+<div class="app" id="root" style="display:none">
+  <div class="header">
+    <div><h1>Santelmo Alimentos</h1><p id="hdate"></p></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="user-chip">👤 <span id="user-email"></span></div>
+      <button class="btn-logout" onclick="sair()">Sair</button>
+    </div>
+  </div>
+  <div class="tabs" id="tabs-bar"></div>
+  <div class="content" id="content">
+    <div class="loading-screen"><div class="spinner"></div><span style="font-size:13px;font-family:var(--mono)">Conectando ao Firebase…</span></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── FIREBASE INIT ─────────────────────────────────────────────────────────────
+firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+const FS   = firebase.firestore;
+
+// ── CONSTANTES DE DATA ────────────────────────────────────────────────────────
+const agora   = new Date();
+const HOJE    = agora.toISOString().split('T')[0];
+const HOJE_BR = agora.toLocaleDateString('pt-BR');
+const ontemD  = new Date(agora); ontemD.setDate(ontemD.getDate()-1);
+const ONTEM   = ontemD.toISOString().split('T')[0];
+const ONTEM_BR= ontemD.toLocaleDateString('pt-BR');
+
+const GALPOES = [
+  {id:'galpao_producao',      label:'Galpão Produção'},
+  {id:'galpao_galinhas_soltas',label:'Galinhas Soltas'},
+  {id:'galpao_recria',        label:'Galpão Recria'},
+];
+const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Config. Lotes','Curvas'];
+
+// ── ESTADO ────────────────────────────────────────────────────────────────────
+let S = {
+  tab: 0, ready: false, erro: null,
+  lotes: [], curvas: {}, jaLancado: {},
+  resp: '',
+  // produtividade
+  pd: HOJE, prod: {}, override_prod: false,
+  // entreposto
+  aviario: null, override_gaiola: false, override_soltas: false,
+  gaiola: {grande:'',extra:'',jumbo:'',sem_class:'',ovo_liquido:''},
+  sp: {},
+  // ração
+  racao: {lote:'', qtd:''},
+  // mortalidade
+  override_mort: false,
+  ml: {}, mo: '',
+  mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
+  // config lotes
+  showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:''},
+  // curvas
+  cg: '', showAddGen: false, ng: '',
+};
+
+function la(){ return S.lotes.filter(l=>l.ativo); }
+function lp(){ return S.lotes.filter(l=>l.ativo && semanas(l.chegada)>=25 && l.tipo==='gaiola'); }
+function ls(){ return S.lotes.filter(l=>l.ativo && l.tipo==='soltas'); }
+function semanas(c){ return Math.floor((agora-new Date(c+'T12:00:00'))/(7*24*60*60*1000)); }
+function fase(s){ if(s<18)return{l:'Recria',c:'br'};if(s<25)return{l:'Pré-postura',c:'bp'};return{l:'Postura ativa',c:'bk'}; }
+function idealPct(gen,sem){ const c=S.curvas[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)]; }
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+function toast(m,ok=true){ const t=document.getElementById('toast');t.textContent=m;t.style.background=ok?'#1B4D35':'#DC2626';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
+
+// ── VERIFICAR TRAVA ───────────────────────────────────────────────────────────
+async function verificar(colecao, docId){
+  try{ const d=await db.collection(colecao).doc(docId).get(); return d.exists?d.data():null; }
+  catch(e){ return null; }
+}
+
+// ── INICIALIZAÇÃO ─────────────────────────────────────────────────────────────
+async function init(){
+  document.getElementById('hdate').textContent = `Lançamento — ${HOJE_BR}`;
+  try{
+    // Carrega lotes ativos
+    const lotesSnap = await db.collection('lotes').get();
+    S.lotes = lotesSnap.docs.map(d=>({id:d.id,...d.data()}));
+    S.lotes.sort((a,b)=>a.nome.localeCompare(b.nome));
+
+    // Carrega curvas
+    const curvasSnap = await db.collection('curvas_postura').get();
+    curvasSnap.docs.forEach(d=>{ S.curvas[d.id]=d.data().curva||{}; });
+    if(curvasSnap.docs.length>0) S.cg=curvasSnap.docs[0].id;
+
+    S.ready = true;
+    render();
+    buildTabs();
+  } catch(e){
+    S.erro = e.message;
+    document.getElementById('content').innerHTML = `<div class="error-screen">❌ Erro ao conectar com Firebase:<br><strong>${e.message}</strong><br><br>Verifique se o FIREBASE_CONFIG está preenchido corretamente.</div>`;
+  }
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function buildTabs(){
+  const bar = document.getElementById('tabs-bar');
+  bar.innerHTML = TABS_NAMES.map((t,i)=>`<button class="tab-btn${S.tab===i?' active':''}" onclick="ST(${i})">${t}</button>`).join('');
+}
+async function ST(i){
+  S.tab=i; S.aviario=null; S.override_prod=false; S.override_gaiola=false; S.override_soltas=false; S.override_mort=false;
+  buildTabs();
+  // Verifica travas ao abrir aba
+  if(i===1){ S.jaLancado.gaiola=await verificar('entreposto',ONTEM+'_gaiola'); S.jaLancado.soltas=await verificar('entreposto',ONTEM+'_soltas'); }
+  if(i===3){ S.jaLancado.mort=await verificar('mortalidade',ONTEM); }
+  if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
+  render();
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function render(){
+  if(!S.ready)return;
+  const map=[t0,t1,t2,t3,t4,t5];
+  document.getElementById('content').innerHTML=map[S.tab]?.()??'';
+}
+
+// ── TAB 0: PRODUTIVIDADE ──────────────────────────────────────────────────────
+function t0(){
+  const lps=lp(); if(!lps.length)return`<div class="ibox">Nenhum lote de gaiola em postura ativa.</div>`;
+  const trava=S.jaLancado.prod&&!S.override_prod;
+  return`
+    <div class="data-badge">📅 Preenchimento periódico — selecione a data da coleta</div>
+    <div class="row-2">
+      <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
+      <div class="form-group"><label>Data da coleta</label><input type="date" value="${S.pd}" max="${HOJE}" oninput="S.pd=this.value;S.jaLancado.prod=null;S.override_prod=false;verificar('produtividade',this.value).then(r=>{S.jaLancado.prod=r;render();})"></div>
+    </div>
+    ${trava?travaCaixa(S.jaLancado.prod,'Já existe lançamento para esta data','S.override_prod=true;render()'):`
+      <div class="stitle">Contagem de ovos por lote</div>
+      ${S.override_prod&&S.jaLancado.prod?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
+      ${lps.map(l=>{const f=S.prod['f_'+l.id]??'';const b=S.prod['b_'+l.id]??'';const fa=f!==''&&(parseFloat(f)<0||parseFloat(f)>90);const ba=b!==''&&(parseFloat(b)<0||parseFloat(b)>90);return`<div class="prow"><div style="font-size:14px;font-weight:600;margin-bottom:2px">${l.nome}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${l.gen} · ${semanas(l.chegada)} semanas</div><div class="row-2"><div><label style="font-size:11px;margin-bottom:3px">Frente</label><input type="number" min="0" max="90" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value">${fa?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div><div><label style="font-size:11px;margin-bottom:3px">Fundo</label><input type="number" min="0" max="90" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value">${ba?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div></div></div>`;}).join('')}
+      <button class="btn-sub" onclick="subProd()">Registrar produtividade</button>`}`;
+}
+
+// ── TAB 1: ENTREPOSTO ─────────────────────────────────────────────────────────
+function t1(){
+  return`
+    <div class="data-badge data-ontem">📅 Referente ao dia anterior — ${ONTEM_BR}</div>
+    <div class="row-2">
+      <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
+      <div class="form-group"><label>Data</label><input type="text" readonly value="${ONTEM_BR}"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Selecione o aviário</label></div>
+    <div class="aviario-selector">
+      <div class="aviario-card${S.aviario==='gaiola'?' ag':''}" onclick="S.aviario='gaiola';render()">
+        ${S.aviario==='gaiola'?`<div class="chk chk-g">✓</div>`:''}
+        <div class="aviario-icon">🏠</div><div class="aviario-title">Galinhas de gaiola</div>
+        <div class="aviario-desc">Grande, extra, jumbo…</div>
+      </div>
+      <div class="aviario-card${S.aviario==='soltas'?' as':''}" onclick="S.aviario='soltas';render()">
+        ${S.aviario==='soltas'?`<div class="chk chk-s">✓</div>`:''}
+        <div class="aviario-icon">🌿</div><div class="aviario-title">Galinhas soltas</div>
+        <div class="aviario-desc">Ninho e chão</div>
+      </div>
+    </div>
+    ${S.aviario==='gaiola'?renderGaiola():S.aviario==='soltas'?renderSoltas():`<div class="hint-box">Selecione o aviário para ver os campos. Cada aviário é registrado separadamente.</div>`}`;
+}
+function renderGaiola(){
+  if(S.jaLancado.gaiola&&!S.override_gaiola) return travaCaixa(S.jaLancado.gaiola,'Gaiola já lançada para ontem','S.override_gaiola=true;render()');
+  const g=S.gaiola;
+  return`<div>
+    ${S.override_gaiola&&S.jaLancado.gaiola?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
+    <div class="stitle">Produção por categoria</div>
+    <div class="row-2">${['grande','extra','jumbo','sem_class'].map(k=>`<div class="form-group"><label>${k==='sem_class'?'Sem classificação':k.charAt(0).toUpperCase()+k.slice(1)}</label><input type="number" min="0" placeholder="0" value="${g[k]||''}" oninput="S.gaiola['${k}']=this.value"></div>`).join('')}</div>
+    <div class="form-group"><label>Ovo líquido (baldes)</label><input type="number" min="0" step="0.5" placeholder="0.0" value="${g.ovo_liquido||''}" oninput="S.gaiola.ovo_liquido=this.value"></div>
+    <button class="btn-sub" onclick="subGaiola()">Registrar — Gaiola</button>
+    <div class="fnote">🔥 setDoc("entreposto","${ONTEM}_gaiola", {merge:true})</div>
+  </div>`;
+}
+function renderSoltas(){
+  const lsArr=ls(); if(!lsArr.length)return`<div class="ibox">Nenhum lote de galinhas soltas ativo.</div>`;
+  if(S.jaLancado.soltas&&!S.override_soltas) return travaCaixa(S.jaLancado.soltas,'Galinhas soltas já lançadas para ontem','S.override_soltas=true;render()');
+  return`<div>
+    ${S.override_soltas&&S.jaLancado.soltas?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
+    <div class="stitle">Ovos por lote</div>
+    ${lsArr.map(l=>{const n=S.sp['n_'+l.id]??'';const c=S.sp['c_'+l.id]??'';const tot=(n!==''&&c!=='')?parseInt(n||0)+parseInt(c||0):null;return`<div class="sbloco"><div style="font-size:13px;font-weight:600;color:#92400E;margin-bottom:10px">${l.nome} <span style="font-size:11px;color:var(--muted);font-weight:400">${l.gen}</span></div><div class="row-2"><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:3px">Ovos no ninho</label><input type="number" min="0" placeholder="0" value="${n}" oninput="S.sp['n_${l.id}']=this.value;render()"></div><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:3px">Ovos no chão</label><input type="number" min="0" placeholder="0" value="${c}" oninput="S.sp['c_${l.id}']=this.value;render()"></div></div>${tot!==null?`<div class="stot">Total: <strong>${tot} ovos</strong> · Ninho: ${tot>0?Math.round(parseInt(n||0)/tot*100):0}% · Chão: ${tot>0?Math.round(parseInt(c||0)/tot*100):0}%</div>`:''}</div>`;}).join('')}
+    <button class="btn-sub amber" onclick="subSoltas()">Registrar — Galinhas soltas</button>
+    <div class="fnote">🔥 setDoc("entreposto","${ONTEM}_soltas", {merge:true})</div>
+  </div>`;
+}
+
+// ── TAB 2: RAÇÃO ──────────────────────────────────────────────────────────────
+function t2(){
+  return`
+    <div class="data-badge data-hoje">📅 Referente a hoje — ${HOJE_BR}</div>
+    <div class="row-2">
+      <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
+      <div class="form-group"><label>Data</label><input type="text" readonly value="${HOJE_BR}"></div>
+    </div>
+    <div class="form-group"><label>Lote de destino</label>
+      <select onchange="S.racao.lote=this.value"><option value="">Selecione o lote</option>
+        ${la().map(l=>`<option value="${l.id}"${S.racao.lote===l.id?' selected':''}>${l.nome} — ${l.gen}${l.tipo==='soltas'?' (soltas)':''}</option>`).join('')}
+      </select></div>
+    <div class="form-group"><label>Quantidade produzida</label>
+      <div style="display:flex;gap:10px">
+        <div class="ropt${S.racao.qtd==='500'?' sel':''}" onclick="S.racao.qtd='500';render()">500 kg</div>
+        <div class="ropt${S.racao.qtd==='1000'?' sel':''}" onclick="S.racao.qtd='1000';render()">1000 kg</div>
+      </div></div>
+    <div class="ibox" style="font-size:11px">Múltiplas batidas por dia são permitidas — cada envio cria um registro separado.</div>
+    <button class="btn-sub" onclick="subRacao()">Registrar batida</button>
+    <div class="fnote">🔥 addDoc("racao") — sem trava, múltiplas batidas esperadas.</div>`;
+}
+
+// ── TAB 3: MORTALIDADE ────────────────────────────────────────────────────────
+function t3(){
+  const trava=S.jaLancado.mort&&!S.override_mort;
+  return`
+    <div class="data-badge data-ontem">📅 Referente ao dia anterior — ${ONTEM_BR}</div>
+    <div class="row-2">
+      <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
+      <div class="form-group"><label>Data</label><input type="text" readonly value="${ONTEM_BR}"></div>
+    </div>
+    ${trava?travaCaixa(S.jaLancado.mort,'Mortalidade já lançada para ontem','S.override_mort=true;render()'):`
+      ${S.override_mort&&S.jaLancado.mort?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
+      <div class="stitle">Mortalidade por lote</div>
+      <div><div style="display:grid;grid-template-columns:1fr 120px;gap:8px;padding:0 0 4px"><span></span><span style="font-size:11px;font-weight:600;color:var(--muted);text-align:center">MORTES</span></div>
+        ${la().map(l=>`<div class="lirow" style="grid-template-columns:1fr 120px"><span style="font-size:13px;font-weight:500">${l.nome}${l.tipo==='soltas'?` <span class="badge bs" style="font-size:10px">soltas</span>`:''} <small style="color:var(--muted);font-size:11px">${semanas(l.chegada)}sem</small></span><input type="number" min="0" max="99" placeholder="0" value="${S.ml[l.id]||''}" oninput="S.ml['${l.id}']=this.value"></div>`).join('')}
+      </div>
+      <div class="stitle">Temperatura dos galpões</div>
+      <div><div style="display:grid;grid-template-columns:1fr 100px 100px;gap:8px;padding:0 0 4px"><span></span><span style="font-size:11px;font-weight:600;color:var(--muted);text-align:center">MÁX °C</span><span style="font-size:11px;font-weight:600;color:var(--muted);text-align:center">MÍN °C</span></div>
+        ${GALPOES.map(g=>`<div class="trow"><span style="font-size:13px;font-weight:500">${g.label}</span><input type="number" min="10" max="45" step="0.1" placeholder="--" value="${S.mt[g.id].max||''}" oninput="S.mt['${g.id}'].max=this.value"><input type="number" min="10" max="45" step="0.1" placeholder="--" value="${S.mt[g.id].min||''}" oninput="S.mt['${g.id}'].min=this.value"></div>`).join('')}
+      </div>
+      <div class="form-group" style="margin-top:14px"><label>Observações</label><textarea rows="2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;resize:vertical;font-family:inherit" placeholder="Opcional..." oninput="S.mo=this.value">${S.mo}</textarea></div>
+      <button class="btn-sub" onclick="subMort()">Registrar mortalidade</button>`}
+    <div class="fnote">🔥 setDoc("mortalidade","${ONTEM}", {merge:true})</div>`;
+}
+
+// ── TAB 4: CONFIG LOTES ───────────────────────────────────────────────────────
+function t4(){
+  const gens=Object.keys(S.curvas);
+  return`
+    <div class="stitle">Lotes cadastrados</div>
+    ${S.lotes.map(l=>{const s=semanas(l.chegada);const f=fase(s);const p=Math.min(100,Math.round(s/60*100));return`<div class="lote-card" style="${!l.ativo?'opacity:.5':''}"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px">${l.nome}${l.tipo==='soltas'?`<span class="badge bs">Galinhas soltas</span>`:''}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${l.gen}</div></div><div style="text-align:right"><div class="wbig">${s}<span style="font-size:13px;font-weight:400;color:var(--muted)"> sem</span></div><span class="badge ${l.ativo?f.c:'bi'}">${l.ativo?f.l:'Inativo'}</span></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${l.ativo?'var(--verde)':'#9CA3AF'}"></div></div><div style="font-size:12px;color:var(--muted);margin-top:4px">Chegada: ${new Date(l.chegada+'T12:00:00').toLocaleDateString('pt-BR')}</div><div style="display:flex;gap:8px;margin-top:10px">${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}</div></div>`;}).join('')}
+    <button class="btn-add" onclick="S.showAdd=!S.showAdd;render()">+ Adicionar novo lote</button>
+    ${S.showAdd?`<div class="aform">
+      <div style="font-size:13px;font-weight:600;color:var(--verde);margin-bottom:12px">Novo lote</div>
+      <div class="row-2" style="margin-bottom:10px">
+        <div class="form-group" style="margin:0"><label>Nome</label><input type="text" placeholder="ex: Lote 21" value="${S.novoLote.nome}" oninput="S.novoLote.nome=this.value"></div>
+        <div class="form-group" style="margin:0"><label>Genética</label>
+          <select onchange="S.novoLote.gen=this.value"><option value="">Selecione</option>${gens.map(g=>`<option value="${g}"${S.novoLote.gen===g?' selected':''}>${g}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px"><label>Tipo de criação</label>
+        <div class="tipo-toggle">
+          <button class="tbtn${S.novoLote.tipo==='gaiola'?' tg':''}" onclick="S.novoLote.tipo='gaiola';render()">Gaiola</button>
+          <button class="tbtn${S.novoLote.tipo==='soltas'?' ts':''}" onclick="S.novoLote.tipo='soltas';render()">Galinhas soltas</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px"><label>Data de chegada</label>
+        <input type="date" value="${S.novoLote.chegada}" max="${HOJE}" oninput="S.novoLote.chegada=this.value;render()">
+      </div>
+      ${S.novoLote.chegada?`<div style="background:white;border:1px solid var(--verde-border);border-radius:6px;padding:8px 12px;font-size:12px;color:#065F46;margin-bottom:12px"><strong>${semanas(S.novoLote.chegada)} semanas</strong> · <span class="badge ${fase(semanas(S.novoLote.chegada)).c}">${fase(semanas(S.novoLote.chegada)).l}</span></div>`:''}
+      <button class="btn-sub" style="margin-top:4px" onclick="adicionarLote()">Salvar lote no Firebase</button>
+    </div>`:''}`;
+}
+
+// ── TAB 5: CURVAS ─────────────────────────────────────────────────────────────
+function t5(){
+  const gens=Object.keys(S.curvas);const gen=S.cg;const curva=S.curvas[gen]||{};
+  const sems=Object.keys(curva).map(Number).sort((a,b)=>a-b);
+  return`
+    <div class="ibox" style="font-size:11px">Valores usados apenas no dashboard. Não aparecem nos formulários de lançamento.</div>
+    <div style="margin-bottom:12px">
+      ${gens.map(g=>`<span class="gen-tab${S.cg===g?' active':''}" onclick="S.cg='${g}';render()">${g} (${Object.keys(S.curvas[g]).length})</span>`).join('')}
+      <span class="gen-tab" onclick="S.showAddGen=!S.showAddGen;render()">+ Nova</span>
+    </div>
+    ${S.showAddGen?`<div class="aform" style="margin-bottom:12px"><div class="form-group" style="margin-bottom:8px"><label>Nome da genética</label><input type="text" placeholder="ex: Lohmann Brown" value="${S.ng}" oninput="S.ng=this.value"></div><button class="btn-sub" style="margin-top:4px" onclick="addGen()">Adicionar</button></div>`:''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:600">${gen}</span>
+      <span style="font-size:12px;color:var(--muted)">${sems.length} semanas · ${sems[0]||'—'}–${sems[sems.length-1]||'—'}</span>
+    </div>
+    <div style="max-height:280px;overflow-y:auto;border:1px solid #E5F7EE;border-radius:8px">
+      <table class="ctbl"><thead><tr><th>Semana</th><th>Ideal (%)</th><th></th></tr></thead>
+      <tbody>${sems.map(s=>`<tr><td style="color:var(--muted)">Sem ${s}</td><td><input type="number" min="0" max="100" step="0.1" value="${curva[s]}" style="width:80px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;background:#FAFFF9" onchange="S.curvas['${gen}'][${s}]=parseFloat(this.value)"></td><td><button onclick="delSem('${gen}',${s})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕</button></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <input type="number" id="nS" min="1" max="120" placeholder="Semana" style="width:90px;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:14px">
+      <input type="number" id="nP" min="0" max="100" step="0.1" placeholder="%" style="width:90px;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:14px">
+      <button onclick="addSem('${gen}')" style="padding:8px 14px;background:var(--verde);color:white;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--sans)">+ Adicionar</button>
+    </div>
+    <button class="sync-btn" onclick="sincronizarCurvas()" style="margin-top:12px">
+      ☁️ Sincronizar todas as curvas com o Firebase
+    </button>`;
+}
+
+// ── HELPER: CAIXA DE TRAVA ────────────────────────────────────────────────────
+function travaCaixa(dados, titulo, onOverride){
+  const hora=dados?.timestamp_envio?.toDate?.()?.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})||'—';
+  return`<div class="trava-box">
+    <div style="font-size:28px;margin-bottom:8px">🔒</div>
+    <div class="trava-title">${titulo}</div>
+    <div class="trava-sub">Este registro já foi enviado. Responsável registrado abaixo.</div>
+    <div class="trava-meta">👤 ${dados?.responsavel||'—'} · ${hora}</div>
+    <br><button class="btn-override" onclick="${onOverride}">Corrigir lançamento</button>
+  </div>`;
+}
+
+// ── SUBMITS ───────────────────────────────────────────────────────────────────
+async function subProd(){
+  if(!S.resp)return alert('Informe o responsável.');
+  if(!S.pd)return alert('Selecione a data.');
+  for(const l of lp()){if((S.prod['f_'+l.id]??'')==''||(S.prod['b_'+l.id]??'')=='')return alert(`Preencha frente e fundo do ${l.nome}.`);}
+  const lotes={};
+  lp().forEach(l=>{lotes[l.id]={frente:parseInt(S.prod['f_'+l.id]),fundo:parseInt(S.prod['b_'+l.id])};});
+  try{
+    await db.collection('produtividade').doc(S.pd).set({
+      data:FS.Timestamp.fromDate(new Date(S.pd+'T12:00:00')),
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+      lotes
+    });
+    toast('✓ Produtividade registrada!');
+    S.prod={};S.override_prod=false;S.jaLancado.prod=await verificar('produtividade',S.pd);render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+async function subGaiola(){
+  if(!S.resp)return alert('Informe o responsável.');
+  if(!S.gaiola.grande)return alert('Informe pelo menos a produção Grande.');
+  try{
+    await db.collection('entreposto').doc(ONTEM+'_gaiola').set({
+      data:FS.Timestamp.fromDate(new Date(ONTEM+'T12:00:00')),
+      grande:parseInt(S.gaiola.grande)||0,
+      extra:parseInt(S.gaiola.extra)||0,
+      jumbo:parseInt(S.gaiola.jumbo)||0,
+      sem_classificacao:parseInt(S.gaiola.sem_class)||0,
+      ovo_liquido:parseFloat(S.gaiola.ovo_liquido)||0,
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+    });
+    toast('✓ Gaiola registrada!');
+    S.gaiola={grande:'',extra:'',jumbo:'',sem_class:'',ovo_liquido:''};
+    S.aviario=null;S.override_gaiola=false;
+    S.jaLancado.gaiola=await verificar('entreposto',ONTEM+'_gaiola');render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+async function subSoltas(){
+  if(!S.resp)return alert('Informe o responsável.');
+  for(const l of ls()){if((S.sp['n_'+l.id]??'')==''||(S.sp['c_'+l.id]??'')=='')return alert(`Preencha ninho e chão do ${l.nome}.`);}
+  const dados={};
+  ls().forEach(l=>{const n=parseInt(S.sp['n_'+l.id])||0;const c=parseInt(S.sp['c_'+l.id])||0;dados[l.id]={ninho:n,chao:c,total:n+c};});
+  try{
+    await db.collection('entreposto').doc(ONTEM+'_soltas').set({
+      data:FS.Timestamp.fromDate(new Date(ONTEM+'T12:00:00')),
+      galinhas_soltas:dados,
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+    });
+    toast('✓ Galinhas soltas registradas!');
+    S.sp={};S.aviario=null;S.override_soltas=false;
+    S.jaLancado.soltas=await verificar('entreposto',ONTEM+'_soltas');render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+async function subRacao(){
+  if(!S.racao.lote||!S.racao.qtd)return alert('Selecione lote e quantidade.');
+  try{
+    await db.collection('racao').add({
+      data:FS.Timestamp.fromDate(new Date()),
+      lote:S.racao.lote,
+      quantidade_kg:parseInt(S.racao.qtd),
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+    });
+    toast('✓ Batida registrada!');S.racao={lote:'',qtd:''};render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+async function subMort(){
+  if(!S.resp)return alert('Informe o responsável.');
+  const lotes={};la().forEach(l=>{lotes[l.id]=parseInt(S.ml[l.id])||0;});
+  const temps={};GALPOES.forEach(g=>{temps[g.id]={max:parseFloat(S.mt[g.id].max)||0,min:parseFloat(S.mt[g.id].min)||0};});
+  try{
+    await db.collection('mortalidade').doc(ONTEM).set({
+      data:FS.Timestamp.fromDate(new Date(ONTEM+'T12:00:00')),
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+      lotes,temperaturas:temps,observacoes:S.mo
+    });
+    toast('✓ Mortalidade registrada!');
+    S.ml={};S.mo='';S.override_mort=false;
+    S.mt={galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}};
+    S.jaLancado.mort=await verificar('mortalidade',ONTEM);render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+// ── GESTÃO DE LOTES ───────────────────────────────────────────────────────────
+async function adicionarLote(){
+  const{nome,gen,tipo,chegada}=S.novoLote;
+  if(!nome||!gen||!chegada)return alert('Preencha todos os campos.');
+  const id=nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+  try{
+    await db.collection('lotes').doc(id).set({nome,gen,tipo,chegada,ativo:true});
+    S.lotes.push({id,nome,gen,tipo,chegada,ativo:true});
+    S.lotes.sort((a,b)=>a.nome.localeCompare(b.nome));
+    S.novoLote={nome:'',gen:'',tipo:'gaiola',chegada:''};S.showAdd=false;
+    toast('✓ Lote adicionado!');render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+async function encerrarLote(id){
+  if(!confirm('Encerrar este lote? Ele ficará inativo nos formulários.'))return;
+  try{ await db.collection('lotes').doc(id).update({ativo:false}); S.lotes.find(l=>l.id===id).ativo=false; toast('Lote encerrado.');render(); }
+  catch(e){toast('Erro: '+e.message,false);}
+}
+async function reativarLote(id){
+  try{ await db.collection('lotes').doc(id).update({ativo:true}); S.lotes.find(l=>l.id===id).ativo=true; toast('Lote reativado.');render(); }
+  catch(e){toast('Erro: '+e.message,false);}
+}
+
+// ── GESTÃO DE CURVAS ──────────────────────────────────────────────────────────
+async function addGen(){
+  if(!S.ng)return; if(S.curvas[S.ng])return alert('Já existe.');
+  S.curvas[S.ng]={};S.cg=S.ng;S.ng='';S.showAddGen=false;toast('✓ Adicionado!');render();
+}
+async function addSem(gen){
+  const s=parseInt(document.getElementById('nS')?.value);const p=parseFloat(document.getElementById('nP')?.value);
+  if(!s||isNaN(p))return alert('Informe semana e %.');
+  S.curvas[gen][s]=p;toast(`Semana ${s} adicionada.`);render();
+}
+function delSem(gen,s){delete S.curvas[gen][s];render();}
+
+async function sincronizarCurvas(){
+  if(!confirm('Enviar todas as curvas para o Firebase? Isso sobrescreverá os dados existentes.'))return;
+  try{
+    const batch=db.batch();
+    Object.entries(S.curvas).forEach(([gen,curva])=>{
+      const ref=db.collection('curvas_postura').doc(gen);
+      batch.set(ref,{curva});
+    });
+    await batch.commit();
+    toast('✓ Curvas sincronizadas com Firebase!');
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+// ── AUTENTICAÇÃO ──────────────────────────────────────────────────────────────
+auth.onAuthStateChanged(user => {
+  if(user){
+    document.getElementById('login-bg').style.display = 'none';
+    document.getElementById('root').style.display     = 'block';
+    document.getElementById('user-email').textContent  = user.email;
+    if(!S.ready) init();
+  } else {
+    document.getElementById('login-bg').style.display = 'flex';
+    document.getElementById('root').style.display     = 'none';
+    S.ready = false;
+  }
+});
+
+async function entrar(){
+  const email = document.getElementById('login-email').value.trim();
+  const senha  = document.getElementById('login-senha').value;
+  const erro   = document.getElementById('login-erro');
+  const btn    = document.getElementById('btn-login');
+  if(!email || !senha){ erro.textContent='Preencha e-mail e senha.'; erro.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  try{
+    await auth.signInWithEmailAndPassword(email, senha);
+    erro.style.display = 'none';
+  } catch(e){
+    const msgs = {
+      'auth/user-not-found':'Usuário não encontrado.',
+      'auth/wrong-password':'Senha incorreta.',
+      'auth/invalid-email':'E-mail inválido.',
+      'auth/too-many-requests':'Muitas tentativas. Aguarde alguns minutos.',
+    };
+    erro.textContent = msgs[e.code] || 'Erro ao entrar. Tente novamente.';
+    erro.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+function sair(){
+  if(confirm('Deseja sair?')) auth.signOut();
+}
+</script>
+</body>
+</html>

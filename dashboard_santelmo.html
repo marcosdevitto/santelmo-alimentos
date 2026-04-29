@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Santelmo Alimentos</title>
+
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  CONFIGURAÇÃO FIREBASE — mesma do arquivo de formulários      ║
+  ╚══════════════════════════════════════════════════════════════╝
+-->
+<script>
+const FIREBASE_CONFIG = {
+  apiKey:            "COLE_AQUI",
+  authDomain:        "COLE_AQUI",
+  projectId:         "COLE_AQUI",
+  storageBucket:     "COLE_AQUI",
+  messagingSenderId: "COLE_AQUI",
+  appId:             "COLE_AQUI"
+};
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --verde:#1B4D35;--verde-mid:#2D6B4A;--verde-light:#ECFDF5;--verde-border:#A7F3D0;
+  --amber:#D97706;--amber-light:#FFFBEB;--red:#DC2626;--red-light:#FEF2F2;
+  --blue:#1D4ED8;--blue-light:#EFF6FF;
+  --ink:#0F1F18;--muted:#5A7065;--bg:#F4F7F5;--card:#FFFFFF;--border:#E0EBE5;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;--serif:'Instrument Serif',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh}
+.header{background:var(--verde);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.header-left h1{font-family:var(--serif);font-size:21px;color:white}
+.header-left p{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px;font-family:var(--mono)}
+.header-right{display:flex;align-items:center;gap:12px}
+.chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:white;font-size:11px;font-family:var(--mono);padding:5px 11px;border-radius:20px;display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:#4ADE80;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn-action{background:white;color:var(--verde);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.btn-action:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.btn-action.loading{opacity:.7;pointer-events:none}
+.dashboard{padding:20px 28px;max-width:1400px;margin:0 auto}
+.grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px}
+.grid-2-eq{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.grid-1{margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+.card-title{font-family:var(--serif);font-size:17px;color:var(--ink);line-height:1.2}
+.card-sub{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+.card-tag{font-size:10px;font-family:var(--mono);padding:3px 9px;border-radius:12px;font-weight:500;white-space:nowrap;flex-shrink:0}
+.tag-green{background:var(--verde-light);color:var(--verde);border:1px solid var(--verde-border)}
+.tag-amber{background:var(--amber-light);color:var(--amber);border:1px solid #FDE68A}
+.tag-red{background:var(--red-light);color:var(--red);border:1px solid #FCA5A5}
+.tag-blue{background:var(--blue-light);color:var(--blue);border:1px solid #BFDBFE}
+.tag-purple{background:#F5F3FF;color:#6D28D9;border:1px solid #DDD6FE}
+
+/* Loading */
+.loading-card{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;gap:10px}
+.spinner{width:24px;height:24px;border:2.5px solid var(--verde-border);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{color:var(--muted);font-size:12px;font-family:var(--mono);text-align:center;padding:20px}
+
+/* Produtividade */
+.prod-layout{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start}
+.prod-table{width:100%;border-collapse:collapse;font-size:12px}
+.prod-table th{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:0 7px 7px;text-align:right;border-bottom:2px solid var(--border);white-space:nowrap}
+.prod-table th:first-child{text-align:left;padding-left:0}
+.prod-table td{padding:7px 7px;border-bottom:1px solid #F3F4F6;text-align:right;vertical-align:middle;font-family:var(--mono);font-size:12px}
+.prod-table td:first-child{text-align:left;font-family:var(--sans);padding-left:0}
+.prod-table tr:last-child td{border-bottom:none}
+.prod-table tr:hover td{background:#FAFFF9}
+.lote-pill{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:var(--verde-light);color:var(--verde)}
+.gen-label{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.date-tag{font-size:10px;color:var(--muted);margin-left:4px;font-family:var(--mono)}
+.diff-wrap{display:flex;align-items:center;gap:5px;justify-content:flex-end}
+.diff-pos{color:#059669;font-weight:600}.diff-neg{color:var(--red);font-weight:600}.diff-zero{color:var(--muted)}
+.mini-bar{width:40px;height:5px;background:#E5E7EB;border-radius:3px;position:relative;flex-shrink:0}
+.mini-bar-c{position:absolute;left:50%;top:0;width:1px;height:5px;background:#9CA3AF}
+.mini-bar-f{position:absolute;top:0;height:5px;border-radius:3px}
+.no-data{color:#D1D5DB;font-style:italic;font-size:11px;font-family:var(--sans)}
+.dias-box{text-align:center;background:linear-gradient(135deg,var(--verde) 0%,var(--verde-mid) 100%);border-radius:12px;padding:14px 16px;color:white;min-width:100px}
+.dias-num{font-family:var(--serif);font-size:40px;line-height:1;margin-bottom:2px}
+.dias-label{font-size:10px;opacity:.8;font-family:var(--mono);line-height:1.5}
+.dias-ref{font-size:10px;opacity:.55;font-family:var(--mono);margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.2)}
+
+/* Entreposto */
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+.stat-item{background:var(--bg);border-radius:8px;padding:8px 8px;text-align:center}
+.stat-val{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--verde)}
+.stat-key{font-size:9px;color:var(--muted);margin-top:1px;text-transform:uppercase;letter-spacing:.04em}
+.chart-sm{position:relative;height:155px}
+
+/* Galinhas soltas */
+.soltas-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.soltas-stat{background:var(--bg);border-radius:10px;padding:10px 14px}
+.soltas-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-family:var(--mono)}
+.soltas-stat-val{font-family:var(--mono);font-size:20px;font-weight:500;margin-top:3px}
+.soltas-stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.chart-md{position:relative;height:190px}
+.chart-lg{position:relative;height:220px}
+.custom-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.legend-line{width:18px;height:2px;flex-shrink:0;border-radius:2px}
+.footer{text-align:center;padding:20px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+@media print{.btn-action,.header{display:none}}
+
+/* Login */
+.login-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0F2D1E 0%,#1B4D35 60%,#2D6B4A 100%);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.login-card{background:white;border-radius:18px;padding:32px 28px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo h2{font-family:var(--serif);font-size:22px;color:var(--verde);margin-top:8px}
+.login-logo p{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:4px}
+.login-field{margin-bottom:14px}
+.login-field label{display:block;font-size:11px;font-weight:600;color:#374151;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.login-field input{width:100%;padding:10px 13px;border:1.5px solid #E5E7EB;border-radius:9px;font-size:14px;outline:none;transition:border .15s;font-family:var(--sans)}
+.login-field input:focus{border-color:var(--verde)}
+.login-erro{font-size:12px;color:var(--red);background:var(--red-light);border:1px solid #FCA5A5;border-radius:7px;padding:8px 12px;margin-bottom:12px;display:none}
+.btn-login{width:100%;padding:12px;background:var(--verde);color:white;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:background .15s}
+.btn-login:hover{background:var(--verde-mid)}
+.btn-login:disabled{background:#9CA3AF;cursor:not-allowed}
+.user-info{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 10px;font-size:11px;color:white;font-family:var(--mono)}
+.btn-sair{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:7px;padding:5px 11px;font-size:11px;font-weight:500;color:white;cursor:pointer;font-family:var(--sans);transition:background .15s}
+.btn-sair:hover{background:rgba(255,255,255,.22)}
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div class="login-bg" id="login-bg">
+  <div class="login-card">
+    <div class="login-logo">
+      <div style="font-size:36px">📊</div>
+      <h2>Santelmo Alimentos</h2>
+      <p>Dashboard de gestão</p>
+    </div>
+    <div class="login-field">
+      <label>E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')entrar()">
+    </div>
+    <div class="login-field">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="••••••••" onkeydown="if(event.key==='Enter')entrar()">
+    </div>
+    <div class="login-erro" id="login-erro"></div>
+    <button class="btn-login" id="btn-login" onclick="entrar()">Entrar</button>
+  </div>
+</div>
+
+<div id="main-app" style="display:none">
+
+<div class="header" id="dash-header">
+  <div class="header-left">
+    <h1>Santelmo Alimentos</h1>
+    <p id="header-date"></p>
+  </div>
+  <div class="header-right">
+    <div class="chip"><span class="dot"></span><span id="chip-status">Conectando…</span></div>
+    <div class="user-info" id="user-info"></div>
+    <button class="btn-sair" onclick="sair()">Sair</button>
+    <button class="btn-action" onclick="recarregar()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Atualizar
+    </button>
+    <button class="btn-action" id="btn-save" onclick="salvarImagem()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Salvar imagem
+    </button>
+  </div>
+</div>
+
+<div class="dashboard" id="dashboard-content">
+  <div class="grid-2">
+    <div class="card"><div class="card-header"><div><div class="card-title">Produtividade</div><div class="card-sub" id="prod-sub">Carregando…</div></div><span class="card-tag tag-blue">Periódico</span></div><div id="prod-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
+    <div class="card"><div class="card-header"><div><div class="card-title">Entreposto — ontem</div><div class="card-sub" id="entre-sub">Carregando…</div></div><span class="card-tag tag-green">Diário</span></div><div id="entre-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
+  </div>
+  <div class="card grid-1"><div class="card-header"><div><div class="card-title">Galinhas Soltas — Produção diária</div><div class="card-sub">Últimos 10 dias · ninho vs chão · % de cada origem</div></div><span class="card-tag tag-purple">10 dias</span></div><div id="soltas-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
+  <div class="card grid-1"><div class="card-header"><div><div class="card-title">Ração produzida</div><div class="card-sub">Últimos 10 dias · total e distribuição por lote · ┊ = segunda-feira</div></div><span class="card-tag tag-amber">10 dias</span></div><div class="chart-lg"><canvas id="chartRacao"></canvas></div><div class="custom-legend" id="legend-racao"></div></div>
+  <div class="grid-2-eq">
+    <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Gaiola</div><div class="card-sub">Últimos 10 dias · temp. Galpão Produção</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortGaiola"></canvas></div><div class="custom-legend" id="legend-mort-gaiola"></div></div>
+    <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Galinhas soltas</div><div class="card-sub">Últimos 10 dias · temp. Galpão Soltas</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortSoltas"></canvas></div><div class="custom-legend" id="legend-mort-soltas"></div></div>
+  </div>
+</div>
+<div class="footer">Santelmo Alimentos · <span id="footer-ts"></span></div>
+</div><!-- /main-app -->
+
+<script>
+// ── FIREBASE ──────────────────────────────────────────────────────────────────
+firebase.initializeApp(FIREBASE_CONFIG);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+// ── CORES E META (serão preenchidos do Firestore) ─────────────────────────────
+const CORES_FIXAS = ['#1B4D35','#2D9A68','#60C48A','#D97706','#F59E0B','#6366F1','#7C3AED','#EC4899'];
+let META={}, CORES={}, LOTES=[], LOTES_GAIOLA=[], LOTES_SOLTAS=[], CURVAS={};
+
+// ── DATAS ─────────────────────────────────────────────────────────────────────
+const hoje    = new Date();
+const HOJE_ISO= hoje.toISOString().split('T')[0];
+const hLong   = hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+document.getElementById('header-date').textContent=`Relatório — ${hLong.charAt(0).toUpperCase()+hLong.slice(1)}`;
+document.getElementById('footer-ts').textContent=hoje.toLocaleString('pt-BR');
+
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function fmtBR(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+function semanas(c){return Math.floor((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));}
+function idealPct(gen,sem){const c=CURVAS[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)];}
+function lSem(labels){
+  // Insere ┊ antes de segundas-feiras
+  return labels.map((lb,i,arr)=>{
+    if(i===0)return lb;
+    // Tenta detectar virada de semana pela posição (assume labels em ordem cronológica)
+    return lb; // com dados reais, usar d.data.getDay()===1
+  });
+}
+function labelsSemana(dados){
+  return dados.map((d,i)=>{
+    const dia=d.data.getDay();const prev=i>0?dados[i-1].data.getDay():-1;
+    return(dia===1&&prev!==1&&i>0?'┊ ':'')+fmtBR(d.data);
+  });
+}
+
+// ── FETCH FIRESTORE ───────────────────────────────────────────────────────────
+async function fetchLotes(){
+  const snap=await db.collection('lotes').get();
+  return snap.docs.map(d=>({id:d.id,...d.data()}));
+}
+async function fetchCurvas(){
+  const snap=await db.collection('curvas_postura').get();
+  const c={};snap.docs.forEach(d=>{c[d.id]=d.data().curva||{};});return c;
+}
+async function fetchProdutividade(){
+  const snap=await db.collection('produtividade')
+    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(3).get();
+  return snap.docs.map(d=>({id:d.id,...d.data()}));
+}
+async function fetchEntreposto(limite=3){
+  const snap=await db.collection('entreposto')
+    .where(firebase.firestore.FieldPath.documentId(),'>=',addDays(hoje,-30).toISOString().split('T')[0]+'_')
+    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(limite*2).get();
+  // Agrupa gaiola+soltas por data base
+  const porData={};
+  snap.docs.forEach(d=>{
+    const partes=d.id.split('_'); // "2026-04-28_gaiola" ou "2026-04-28_soltas"
+    const dataBase=partes[0]; const tipo=partes[1];
+    if(!porData[dataBase])porData[dataBase]={id:dataBase,data:d.data().data?.toDate()||new Date(dataBase+'T12:00:00')};
+    if(tipo==='gaiola') Object.assign(porData[dataBase],d.data());
+    if(tipo==='soltas') porData[dataBase].galinhas_soltas=d.data().galinhas_soltas||{};
+  });
+  return Object.values(porData).sort((a,b)=>a.id.localeCompare(b.id)).slice(-limite);
+}
+async function fetchRacao(){
+  const dInicio=new Date(hoje); dInicio.setDate(dInicio.getDate()-11);
+  const snap=await db.collection('racao')
+    .where('data','>=',firebase.firestore.Timestamp.fromDate(dInicio))
+    .orderBy('data').get();
+  const dias={}; const dArr=[];
+  // Gera últimos 10 dias
+  for(let i=9;i>=0;i--){const d=addDays(hoje,-(i+1));const k=d.toISOString().split('T')[0];dias[k]={data:d,lotes:{}};dArr.push(k);}
+  snap.docs.forEach(d=>{
+    const rec=d.data();
+    const k=rec.data.toDate().toISOString().split('T')[0];
+    if(!dias[k])return;
+    dias[k].lotes[rec.lote]=(dias[k].lotes[rec.lote]||0)+rec.quantidade_kg;
+  });
+  return dArr.map(k=>dias[k]);
+}
+async function fetchMortalidade(){
+  const snap=await db.collection('mortalidade')
+    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(10).get();
+  return snap.docs.map(d=>({id:d.id,...d.data(),data:new Date(d.id+'T12:00:00')})).reverse();
+}
+async function fetchSoltas(){
+  // Busca dos documentos de entreposto com sufixo _soltas
+  const snap=await db.collection('entreposto')
+    .where(firebase.firestore.FieldPath.documentId(),'>=',addDays(hoje,-12).toISOString().split('T')[0]+'_soltas')
+    .where(firebase.firestore.FieldPath.documentId(),'<=',HOJE_ISO+'_soltas')
+    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(10).get();
+  const dias={};const dArr=[];
+  for(let i=9;i>=0;i--){const d=addDays(hoje,-(i+1));const k=d.toISOString().split('T')[0];dias[k]={data:d,ninho:null,chao:null,total:null};dArr.push(k);}
+  snap.docs.forEach(d=>{
+    const k=d.id.replace('_soltas','');
+    if(!dias[k])return;
+    const gs=d.data().galinhas_soltas||{};
+    let n=0,c=0;
+    Object.values(gs).forEach(v=>{n+=v.ninho||0;c+=v.chao||0;});
+    dias[k]={...dias[k],ninho:n,chao:c,total:n+c};
+  });
+  return dArr.map(k=>dias[k]);
+}
+
+// ── RENDER PRODUTIVIDADE ──────────────────────────────────────────────────────
+function renderProd(docs){
+  if(!docs.length){document.getElementById('prod-body').innerHTML='<div class="empty">Nenhum lançamento encontrado.</div>';return;}
+  const ultimo=docs[0];
+  const dias=Math.floor((hoje-new Date(ultimo.id+'T12:00:00'))/(24*60*60*1000));
+  document.getElementById('prod-sub').textContent=`Último: ${new Date(ultimo.id+'T12:00:00').toLocaleDateString('pt-BR')} · ${Object.keys(ultimo.lotes||{}).length} lotes`;
+
+  let rows=''; const vistos=new Set();
+  docs.forEach(lanc=>{
+    Object.entries(lanc.lotes||{}).forEach(([id,v])=>{
+      if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola')return; vistos.add(id);
+      const m=META[id]; const sem=semanas(m.chegada);
+      const media=(v.frente+v.fundo)/2; const prodP=(media/90)*100;
+      const idealV=idealPct(m.gen,sem); const diff=idealV!==null?prodP-idealV:null;
+      const isUlt=lanc===ultimo;
+      let diffH='<span class="no-data">—</span>';
+      if(diff!==null){
+        const cls=Math.abs(diff)<0.5?'diff-zero':diff>0?'diff-pos':'diff-neg';
+        const arr=diff>0.5?'▲':diff<-0.5?'▼':'';
+        const p50=Math.min(Math.abs(diff)/15*50,50);const bL=diff<0?`${50-p50}%`:'50%';
+        diffH=`<div class="diff-wrap"><span class="${cls}">${arr} ${diff>0?'+':''}${diff.toFixed(2)}%</span><div class="mini-bar"><div class="mini-bar-c"></div><div class="mini-bar-f" style="left:${bL};width:${p50}%;background:${diff>0?'#059669':'#DC2626'}"></div></div></div>`;
+      }
+      const dtag=!isUlt?`<span class="date-tag">${fmtBR(new Date(lanc.id+'T12:00:00'))}</span>`:'';
+      rows+=`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${sem}sem</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td><td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${media.toFixed(1)}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`;
+    });
+  });
+
+  document.getElementById('prod-body').innerHTML=`
+    <div class="prod-layout">
+      <table class="prod-table">
+        <thead><tr><th>Lote</th><th style="color:var(--blue)">Frente</th><th style="color:var(--blue)">Fundo</th><th>Média</th><th>Produção %</th><th>Ideal %</th><th>Diferença</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="dias-box"><div class="dias-num">${dias}</div><div class="dias-label">dias desde<br>último<br>levantamento</div><div class="dias-ref">${fmtBR(new Date(ultimo.id+'T12:00:00'))}</div></div>
+    </div>`;
+}
+
+// ── RENDER ENTREPOSTO ─────────────────────────────────────────────────────────
+function renderEntreposto(docs){
+  if(!docs.length){document.getElementById('entre-body').innerHTML='<div class="empty">Nenhum registro encontrado.</div>';return;}
+  const ontem=docs[docs.length-1];
+  document.getElementById('entre-sub').textContent=`Ontem ${fmtBR(ontem.data)} · últimos ${docs.length} dias`;
+  const cats=[{k:'grande',l:'Grande'},{k:'extra',l:'Extra'},{k:'jumbo',l:'Jumbo'},{k:'sem_classificacao',l:'Sem cls.'},{k:'ovo_liquido',l:'Líquido'}];
+  const statsHTML=cats.map(c=>`<div class="stat-item"><div class="stat-val">${ontem[c.k]??0}</div><div class="stat-key">${c.l}</div></div>`).join('');
+
+  document.getElementById('entre-body').innerHTML=`<div class="stat-row">${statsHTML}</div><div class="chart-sm"><canvas id="chartEntreposto"></canvas></div>`;
+
+  const eCores={grande:'#1B4D35',extra:'#2D9A68',jumbo:'#60C48A',sem_classificacao:'#A7F3D0',ovo_liquido:'#D97706'};
+  const eCL={grande:'Grande',extra:'Extra',jumbo:'Jumbo',sem_classificacao:'Sem cls.',ovo_liquido:'Líquido'};
+  new Chart(document.getElementById('chartEntreposto'),{type:'bar',data:{labels:docs.map(e=>fmtBR(e.data)),datasets:Object.keys(eCores).map(k=>({label:eCL[k],data:docs.map(e=>e[k]||0),backgroundColor:eCores[k],borderRadius:0}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:9,family:'DM Mono'},boxWidth:7,boxHeight:7,padding:5}},tooltip:{bodyFont:{family:'DM Mono'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'}}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:10,family:'DM Mono'}}}}}});
+}
+
+// ── RENDER GALINHAS SOLTAS ────────────────────────────────────────────────────
+function renderSoltas(dados){
+  const temDados=dados.some(d=>d.total!==null);
+  if(!temDados){document.getElementById('soltas-body').innerHTML='<div class="empty">Nenhum lançamento de galinhas soltas encontrado.</div>';return;}
+  const ult=dados.filter(d=>d.total!==null).slice(-1)[0];
+  const pN=ult&&ult.total>0?Math.round(ult.ninho/ult.total*100):0;
+  const pC=100-pN;
+
+  const soltasPlugin={id:'sp',afterDatasetsDraw(chart){
+    const{ctx,data}=chart;const n=dados.length;
+    for(let i=0;i<n;i++){
+      const tot=dados[i].total;if(!tot)continue;
+      let topY=null;
+      data.datasets.forEach((ds,di)=>{const bar=chart.getDatasetMeta(di).data[i];if(ds.data[i]>0&&(topY===null||bar.y<topY))topY=bar.y;});
+      if(topY===null)continue;
+      ctx.save();ctx.fillStyle='#7C3AED';ctx.font=`600 10px 'DM Mono'`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(tot+' ovos',chart.getDatasetMeta(0).data[i].x,topY-3);ctx.restore();
+    }
+    data.datasets.forEach((ds,di)=>{chart.getDatasetMeta(di).data.forEach((bar,i)=>{const val=ds.data[i];const tot=dados[i].total;if(!tot||!val||bar.height<14)return;const pct=Math.round(val/tot*100);ctx.save();ctx.fillStyle=di===0?'rgba(255,255,255,.92)':'rgba(90,60,150,.85)';ctx.font=`500 10px 'DM Mono'`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(pct+'%',bar.x,bar.y+bar.height/2);ctx.restore();});});
+  }};
+
+  document.getElementById('soltas-body').innerHTML=`
+    <div class="soltas-summary">
+      <div class="soltas-stat"><div class="soltas-stat-label">Total ontem</div><div class="soltas-stat-val">${ult?.total??'—'} ovos</div></div>
+      <div class="soltas-stat"><div class="soltas-stat-label">No ninho</div><div class="soltas-stat-val">${ult?.ninho??'—'} ovos</div><div class="soltas-stat-sub">${pN}% do total</div></div>
+      <div class="soltas-stat"><div class="soltas-stat-label">No chão</div><div class="soltas-stat-val">${ult?.chao??'—'} ovos</div><div class="soltas-stat-sub">${pC}% do total</div></div>
+    </div>
+    <div class="chart-md"><canvas id="chartSoltas"></canvas></div>
+    <div class="custom-legend" id="legend-soltas"></div>`;
+
+  new Chart(document.getElementById('chartSoltas'),{type:'bar',plugins:[soltasPlugin],data:{labels:labelsSemana(dados),datasets:[{label:'Ninho',data:dados.map(d=>d.ninho||0),backgroundColor:'#7C3AED',borderRadius:0},{label:'Chão',data:dados.map(d=>d.chao||0),backgroundColor:'#DDD6FE',borderRadius:0}]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'},maxRotation:0}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:10,family:'DM Mono'},stepSize:10}}}}});
+
+  const lsEl=document.getElementById('legend-soltas');
+  [{c:'#7C3AED',l:'Ninho'},{c:'#DDD6FE',l:'Chão'}].forEach(x=>{const d=document.createElement('div');d.className='legend-item';d.innerHTML=`<div class="legend-dot" style="background:${x.c}"></div>${x.l}`;lsEl.appendChild(d);});
+}
+
+// ── RENDER RAÇÃO ──────────────────────────────────────────────────────────────
+function renderRacao(dados){
+  const racaoPlugin={id:'rp',afterDatasetsDraw(chart){
+    const{ctx,data}=chart;const n=dados.length;
+    for(let i=0;i<n;i++){
+      let tot=0;let topY=null;
+      data.datasets.forEach((ds,di)=>{tot+=ds.data[i]||0;const bar=chart.getDatasetMeta(di).data[i];if(ds.data[i]>0&&(topY===null||bar.y<topY))topY=bar.y;});
+      if(!tot||topY===null)continue;
+      ctx.save();ctx.fillStyle='#1B4D35';ctx.font=`600 10px 'DM Mono'`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(tot+'kg',chart.getDatasetMeta(0).data[i].x,topY-3);ctx.restore();
+    }
+    data.datasets.forEach((ds,di)=>{chart.getDatasetMeta(di).data.forEach((bar,i)=>{const val=ds.data[i];if(!val||bar.height<16)return;ctx.save();ctx.fillStyle='rgba(255,255,255,.85)';ctx.font=`500 9px 'DM Mono'`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(val+'kg',bar.x,bar.y+bar.height/2);ctx.restore();});});
+  }};
+
+  new Chart(document.getElementById('chartRacao'),{type:'bar',plugins:[racaoPlugin],data:{labels:labelsSemana(dados),datasets:LOTES.map(l=>({label:META[l].nome,data:dados.map(d=>d.lotes[l]||0),backgroundColor:CORES[l],borderRadius:0}))},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20}},plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'},callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.raw} kg`}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'},maxRotation:0}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:10,family:'DM Mono'},callback:v=>v+'kg'}}}}});
+
+  const lrEl=document.getElementById('legend-racao');lrEl.innerHTML='';
+  LOTES.forEach(l=>{const d=document.createElement('div');d.className='legend-item';d.innerHTML=`<div class="legend-dot" style="background:${CORES[l]}"></div>${META[l].nome}`;lrEl.appendChild(d);});
+}
+
+// ── RENDER MORTALIDADE ────────────────────────────────────────────────────────
+function buildMortPlugin(lotesGrupo){
+  return{id:'mp'+lotesGrupo.join(''),afterDatasetsDraw(chart){
+    const{ctx,data}=chart;const n=chart.data.labels.length;const bc=lotesGrupo.length;
+    for(let i=0;i<n;i++){
+      let tot=0;let topY=null;
+      for(let di=0;di<bc;di++){const v=data.datasets[di].data[i]||0;tot+=v;if(v>0){const bar=chart.getDatasetMeta(di).data[i];if(topY===null||bar.y<topY)topY=bar.y;}}
+      if(!tot||topY===null)continue;
+      ctx.save();ctx.fillStyle='#DC2626';ctx.font=`700 10px 'DM Mono'`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(tot,chart.getDatasetMeta(0).data[i].x,topY-3);ctx.restore();
+    }
+    for(let di=0;di<bc;di++){chart.getDatasetMeta(di).data.forEach((bar,i)=>{const val=data.datasets[di].data[i];if(!val||bar.height<14)return;ctx.save();ctx.fillStyle='rgba(255,255,255,.9)';ctx.font=`500 10px 'DM Mono'`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(val,bar.x,bar.y+bar.height/2);ctx.restore();});}
+  }};
+}
+
+function renderMortChart(canvasId, legendId, dados, lotesGrupo, galpaoTemp){
+  const barDS=lotesGrupo.map(l=>({type:'bar',label:META[l]?.nome||l,data:dados.map(d=>(d.lotes||{})[l]||0),backgroundColor:CORES[l]||'#999',yAxisID:'y',borderRadius:0,order:2}));
+  const tempMax={type:'line',label:'Temp máx',data:dados.map(d=>(d.temperaturas||{})[galpaoTemp]?.max||null),borderColor:'#EF4444',borderWidth:2,pointRadius:3,pointBackgroundColor:'#EF4444',tension:.3,yAxisID:'y1',order:1,fill:false,spanGaps:true};
+  const tempMin={type:'line',label:'Temp mín',data:dados.map(d=>(d.temperaturas||{})[galpaoTemp]?.min||null),borderColor:'#60A5FA',borderWidth:2,pointRadius:3,pointBackgroundColor:'#60A5FA',borderDash:[4,3],tension:.3,yAxisID:'y1',order:1,fill:false,spanGaps:true};
+  new Chart(document.getElementById(canvasId),{type:'bar',plugins:[buildMortPlugin(lotesGrupo)],data:{labels:labelsSemana(dados),datasets:[...barDS,tempMax,tempMin]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'},callbacks:{label:ctx=>{if(ctx.dataset.label.startsWith('Temp'))return ` ${ctx.dataset.label}: ${ctx.raw}°C`;return ` ${ctx.dataset.label}: ${ctx.raw} ave${ctx.raw!==1?'s':''}`;}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'},maxRotation:0}},y:{stacked:true,position:'left',grid:{color:'#F0F4F2'},title:{display:true,text:'Mortes',font:{size:9,family:'DM Mono'},color:var(--muted)},ticks:{font:{size:10,family:'DM Mono'},stepSize:1}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'°C',font:{size:9,family:'DM Mono'}},ticks:{font:{size:10,family:'DM Mono'},callback:v=>v+'°'}}}}});
+  const el=document.getElementById(legendId);el.innerHTML='';
+  lotesGrupo.forEach(l=>{const d=document.createElement('div');d.className='legend-item';d.innerHTML=`<div class="legend-dot" style="background:${CORES[l]||'#999'}"></div>${META[l]?.nome||l}`;el.appendChild(d);});
+  [{c:'#EF4444',l:'Temp máx',dash:false},{c:'#60A5FA',l:'Temp mín',dash:true}].forEach(x=>{const d=document.createElement('div');d.className='legend-item';d.innerHTML=`<div class="legend-line" style="${x.dash?`background:repeating-linear-gradient(90deg,${x.c} 0,${x.c} 4px,transparent 4px,transparent 7px)`:`background:${x.c}`}"></div>${x.l}`;el.appendChild(d);});
+}
+
+// ── LOAD TUDO ─────────────────────────────────────────────────────────────────
+async function carregar(){
+  try{
+    document.getElementById('chip-status').textContent='Carregando…';
+
+    // 1. Lotes e curvas
+    const [lotes, curvas] = await Promise.all([fetchLotes(), fetchCurvas()]);
+    CURVAS = curvas;
+    lotes.sort((a,b)=>a.nome.localeCompare(b.nome));
+    lotes.forEach((l,i)=>{ META[l.id]=l; CORES[l.id]=CORES_FIXAS[i%CORES_FIXAS.length]; });
+    LOTES        = lotes.map(l=>l.id);
+    LOTES_GAIOLA = lotes.filter(l=>l.tipo==='gaiola').map(l=>l.id);
+    LOTES_SOLTAS = lotes.filter(l=>l.tipo==='soltas').map(l=>l.id);
+
+    // 2. Todos os dados em paralelo
+    const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados] = await Promise.all([
+      fetchProdutividade(),
+      fetchEntreposto(3),
+      fetchRacao(),
+      fetchMortalidade(),
+      fetchSoltas(),
+    ]);
+
+    // 3. Renderiza cada seção
+    renderProd(prodDocs);
+    renderEntreposto(entreDocs);
+    renderSoltas(soltasDados);
+    renderRacao(racaoDados);
+    renderMortChart('chartMortGaiola','legend-mort-gaiola',mortDados,LOTES_GAIOLA,'galpao_producao');
+    renderMortChart('chartMortSoltas','legend-mort-soltas',mortDados,LOTES_SOLTAS,'galpao_galinhas_soltas');
+
+    document.getElementById('chip-status').textContent='Firebase ✓';
+    document.getElementById('footer-ts').textContent=new Date().toLocaleString('pt-BR');
+
+  }catch(e){
+    document.getElementById('chip-status').textContent='Erro ✗';
+    console.error(e);
+    alert('Erro ao carregar dados: '+e.message+'\n\nVerifique o FIREBASE_CONFIG e as regras do Firestore.');
+  }
+}
+
+function recarregar(){ Chart.instances&&Object.values(Chart.instances).forEach(c=>c.destroy&&c.destroy()); carregar(); }
+
+// ── SALVAR IMAGEM ─────────────────────────────────────────────────────────────
+async function salvarImagem(){
+  const btn=document.getElementById('btn-save');btn.classList.add('loading');btn.textContent='Gerando…';
+  document.getElementById('dash-header').style.display='none';
+  try{
+    const c=await html2canvas(document.getElementById('dashboard-content'),{scale:2,backgroundColor:'#F4F7F5',useCORS:true,logging:false});
+    const a=document.createElement('a');a.download=`Relatorio_Santelmo_${HOJE_ISO}.png`;a.href=c.toDataURL('image/png');a.click();
+  }finally{
+    document.getElementById('dash-header').style.display='flex';
+    btn.classList.remove('loading');
+    btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Salvar imagem`;
+  }
+}
+
+// ── AUTENTICAÇÃO ──────────────────────────────────────────────────────────────
+let jaCarregou = false;
+
+auth.onAuthStateChanged(user => {
+  if(user){
+    document.getElementById('login-bg').style.display  = 'none';
+    document.getElementById('main-app').style.display  = 'block';
+    document.getElementById('user-info').textContent   = '👤 '+user.email;
+    const hLong2=hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+    document.getElementById('header-date').textContent=`Relatório — ${hLong2.charAt(0).toUpperCase()+hLong2.slice(1)}`;
+    document.getElementById('footer-ts').textContent=hoje.toLocaleString('pt-BR');
+    if(!jaCarregou){ jaCarregou=true; carregar(); }
+  } else {
+    document.getElementById('login-bg').style.display  = 'flex';
+    document.getElementById('main-app').style.display  = 'none';
+    jaCarregou = false;
+  }
+});
+
+async function entrar(){
+  const email=document.getElementById('login-email').value.trim();
+  const senha=document.getElementById('login-senha').value;
+  const erro=document.getElementById('login-erro');
+  const btn=document.getElementById('btn-login');
+  if(!email||!senha){erro.textContent='Preencha e-mail e senha.';erro.style.display='block';return;}
+  btn.disabled=true;btn.textContent='Entrando…';
+  try{
+    await auth.signInWithEmailAndPassword(email,senha);
+    erro.style.display='none';
+  }catch(e){
+    const msgs={'auth/user-not-found':'Usuário não encontrado.','auth/wrong-password':'Senha incorreta.','auth/invalid-email':'E-mail inválido.','auth/too-many-requests':'Muitas tentativas. Aguarde alguns minutos.'};
+    erro.textContent=msgs[e.code]||'Erro ao entrar. Tente novamente.';erro.style.display='block';
+  }finally{btn.disabled=false;btn.textContent='Entrar';}
+}
+
+function sair(){ if(confirm('Deseja sair?')) auth.signOut(); }
+</script>
+</body>
+</html>
