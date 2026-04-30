@@ -267,18 +267,25 @@ function toDate(v){
 }
 
 async function fetchEntreposto(limite=3){
-  const snap=await db.collection('entreposto')
-    .where(firebase.firestore.FieldPath.documentId(),'>=',addDays(hoje,-30).toISOString().split('T')[0]+'_')
-    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(limite*2).get();
-  const porData={};
-  snap.docs.forEach(d=>{
-    const partes=d.id.split('_');
-    const dataBase=partes[0]; const tipo=partes[1];
-    if(!porData[dataBase])porData[dataBase]={id:dataBase,data:toDate(d.data().data)||new Date(dataBase+'T12:00:00')};
-    if(tipo==='gaiola') Object.assign(porData[dataBase],d.data());
-    if(tipo==='soltas') porData[dataBase].galinhas_soltas=d.data().galinhas_soltas||{};
+  // Busca os últimos 'limite' dias individualmente (gaiola + soltas por dia)
+  const dArr=[];
+  for(let i=limite-1;i>=0;i--){
+    const d=addDays(hoje,-(i+1));
+    dArr.push({data:d, key:d.toISOString().split('T')[0]});
+  }
+  const promises=dArr.flatMap(({key})=>[
+    db.collection('entreposto').doc(key+'_gaiola').get(),
+    db.collection('entreposto').doc(key+'_soltas').get(),
+  ]);
+  const snaps=await Promise.all(promises);
+  return dArr.map(({data,key},i)=>{
+    const gDoc=snaps[i*2];
+    const sDoc=snaps[i*2+1];
+    const entry={id:key,data};
+    if(gDoc.exists) Object.assign(entry,gDoc.data());
+    if(sDoc.exists) entry.galinhas_soltas=sDoc.data().galinhas_soltas||{};
+    return entry;
   });
-  return Object.values(porData).sort((a,b)=>a.id.localeCompare(b.id)).slice(-limite);
 }
 async function fetchRacao(){
   const dInicio=new Date(hoje); dInicio.setDate(dInicio.getDate()-11);
@@ -303,21 +310,25 @@ async function fetchMortalidade(){
   return snap.docs.map(d=>({id:d.id,...d.data(),data:new Date(d.id+'T12:00:00')})).reverse();
 }
 async function fetchSoltas(){
-  const snap=await db.collection('entreposto')
-    .where(firebase.firestore.FieldPath.documentId(),'>=',addDays(hoje,-12).toISOString().split('T')[0]+'_soltas')
-    .where(firebase.firestore.FieldPath.documentId(),'<=',HOJE_ISO+'_soltas')
-    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(10).get();
-  const dias={};const dArr=[];
-  for(let i=9;i>=0;i--){const d=addDays(hoje,-(i+1));const k=d.toISOString().split('T')[0];dias[k]={data:d,ninho:null,chao:null,total:null};dArr.push(k);}
-  snap.docs.forEach(d=>{
-    const k=d.id.replace('_soltas','');
-    if(!dias[k])return;
-    const gs=d.data().galinhas_soltas||{};
+  // Busca direto cada documento _soltas dos últimos 10 dias individualmente
+  const dArr=[];
+  for(let i=9;i>=0;i--){
+    const d=addDays(hoje,-(i+1));
+    dArr.push({data:d, key:d.toISOString().split('T')[0]});
+  }
+  // Busca todos de uma vez com Promise.all
+  const promises=dArr.map(({key})=>
+    db.collection('entreposto').doc(key+'_soltas').get()
+  );
+  const snaps=await Promise.all(promises);
+  return dArr.map(({data,key},i)=>{
+    const doc=snaps[i];
+    if(!doc.exists) return {data,ninho:null,chao:null,total:null};
+    const gs=doc.data().galinhas_soltas||{};
     let n=0,c=0;
     Object.values(gs).forEach(v=>{n+=v.ninho||0;c+=v.chao||0;});
-    dias[k]={...dias[k],ninho:n,chao:c,total:n+c};
+    return {data,ninho:n,chao:c,total:n+c};
   });
-  return dArr.map(k=>dias[k]);
 }
 
 // ── RENDER PRODUTIVIDADE ──────────────────────────────────────────────────────
