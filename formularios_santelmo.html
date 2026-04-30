@@ -251,10 +251,10 @@ let S = {
 };
 
 function la(){ return S.lotes.filter(l=>l.ativo); }
-function lp(){ return S.lotes.filter(l=>l.ativo && semanas(l.chegada)>=25 && l.tipo==='gaiola'); }
+function lp(){ return S.lotes.filter(l=>l.ativo && semanas(l.chegada)>=26 && l.tipo==='gaiola'); }
 function ls(){ return S.lotes.filter(l=>l.ativo && l.tipo==='soltas'); }
-function semanas(c){ return Math.floor((agora-new Date(c+'T12:00:00'))/(7*24*60*60*1000)); }
-function fase(s){ if(s<18)return{l:'Recria',c:'br'};if(s<25)return{l:'Pré-postura',c:'bp'};return{l:'Postura ativa',c:'bk'}; }
+function semanas(c){ return Math.floor((agora-new Date(c+'T12:00:00'))/(7*24*60*60*1000))+1; }
+function fase(s){ if(s<19)return{l:'Recria',c:'br'};if(s<26)return{l:'Pré-postura',c:'bp'};return{l:'Postura ativa',c:'bk'}; }
 function idealPct(gen,sem){ const c=S.curvas[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)]; }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────

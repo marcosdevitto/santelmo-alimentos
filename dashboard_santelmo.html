@@ -223,7 +223,7 @@ function labelsSemana(dados){
     const dia=dt.getDay(); const prev=i>0?(toDate(dados[i-1].data)||dados[i-1].data).getDay?.()??-1:-1;
     return(dia===1&&prev!==1&&i>0?'┊ ':'')+fmtBR(dt);
   });
-}function semanas(c){return Math.floor((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));}
+}function semanas(c){return Math.floor((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000))+1;}
 function idealPct(gen,sem){const c=CURVAS[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)];}
 
 // ── FETCH FIRESTORE ───────────────────────────────────────────────────────────
