@@ -331,9 +331,13 @@ function renderProd(docs){
   docs.forEach(lanc=>{
     Object.entries(lanc.lotes||{}).forEach(([id,v])=>{
       if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola')return; vistos.add(id);
-      const m=META[id]; const sem=semanas(m.chegada);
+      const m=META[id];
+      // Semana na data do levantamento — ideal fixo no momento da coleta
+      const dataLanc=new Date(lanc.id+'T12:00:00');
+      const semNaData=Math.floor((dataLanc-new Date(m.chegada+'T12:00:00'))/(7*24*60*60*1000))+1;
+      const semAtual=semanas(m.chegada); // só para exibir a idade atual
       const media=(v.frente+v.fundo)/2; const prodP=(media/90)*100;
-      const idealV=idealPct(m.gen,sem); const diff=idealV!==null?prodP-idealV:null;
+      const idealV=idealPct(m.gen,semNaData); const diff=idealV!==null?prodP-idealV:null;
       const isUlt=lanc===ultimo;
       let diffH='<span class="no-data">—</span>';
       if(diff!==null){
@@ -343,7 +347,7 @@ function renderProd(docs){
         diffH=`<div class="diff-wrap"><span class="${cls}">${arr} ${diff>0?'+':''}${diff.toFixed(2)}%</span><div class="mini-bar"><div class="mini-bar-c"></div><div class="mini-bar-f" style="left:${bL};width:${p50}%;background:${diff>0?'#059669':'#DC2626'}"></div></div></div>`;
       }
       const dtag=!isUlt?`<span class="date-tag">${fmtBR(new Date(lanc.id+'T12:00:00'))}</span>`:'';
-      rows+=`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${sem}sem</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td><td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${media.toFixed(1)}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`;
+      rows+=`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${semAtual}sem atual · ideal da sem ${semNaData}</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td><td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${media.toFixed(1)}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`;
     });
   });
 
