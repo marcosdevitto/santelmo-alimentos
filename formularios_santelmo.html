@@ -234,13 +234,14 @@ let S = {
   // produtividade
   pd: HOJE, prod: {}, override_prod: false,
   // entreposto
+  ed: ONTEM,
   aviario: null, override_gaiola: false, override_soltas: false,
   gaiola: {grande:'',extra:'',jumbo:'',sem_class:'',ovo_liquido:''},
   sp: {},
   // ração
-  racao: {lote:'', qtd:''},
+  racao: {lote:'', qtd:'', data: HOJE},
   // mortalidade
-  override_mort: false,
+  override_mort: false, md: ONTEM,
   ml: {}, mo: '',
   mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
   // config lotes
@@ -309,8 +310,8 @@ async function ST(i){
   S.tab=i; S.aviario=null; S.override_prod=false; S.override_gaiola=false; S.override_soltas=false; S.override_mort=false;
   buildTabs();
   // Verifica travas ao abrir aba
-  if(i===1){ S.jaLancado.gaiola=await verificar('entreposto',ONTEM+'_gaiola'); S.jaLancado.soltas=await verificar('entreposto',ONTEM+'_soltas'); }
-  if(i===3){ S.jaLancado.mort=await verificar('mortalidade',ONTEM); }
+  if(i===1){ S.jaLancado.gaiola=await verificar('entreposto',S.ed+'_gaiola'); S.jaLancado.soltas=await verificar('entreposto',S.ed+'_soltas'); }
+  if(i===3){ S.jaLancado.mort=await verificar('mortalidade',S.md); }
   if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
   render();
 }
@@ -342,10 +343,13 @@ function t0(){
 // ── TAB 1: ENTREPOSTO ─────────────────────────────────────────────────────────
 function t1(){
   return`
-    <div class="data-badge data-ontem">📅 Referente ao dia anterior — ${ONTEM_BR}</div>
     <div class="row-2">
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
-      <div class="form-group"><label>Data</label><input type="text" readonly value="${ONTEM_BR}"></div>
+      <div class="form-group"><label>Data referente aos dados</label>
+        <input type="date" value="${S.ed}" max="${HOJE}"
+          oninput="S.ed=this.value;S.jaLancado.gaiola=null;S.jaLancado.soltas=null;S.override_gaiola=false;S.override_soltas=false;
+          Promise.all([verificar('entreposto',this.value+'_gaiola'),verificar('entreposto',this.value+'_soltas')]).then(([g,s])=>{S.jaLancado.gaiola=g;S.jaLancado.soltas=s;render();})">
+      </div>
     </div>
     <div class="divider"></div>
     <div class="form-group" style="margin-bottom:12px"><label>Selecione o aviário</label></div>
@@ -372,7 +376,7 @@ function renderGaiola(){
     <div class="row-2">${['grande','extra','jumbo','sem_class'].map(k=>`<div class="form-group"><label>${k==='sem_class'?'Sem classificação':k.charAt(0).toUpperCase()+k.slice(1)}</label><input type="number" min="0" placeholder="0" value="${g[k]||''}" oninput="S.gaiola['${k}']=this.value"></div>`).join('')}</div>
     <div class="form-group"><label>Ovo líquido (baldes)</label><input type="number" min="0" step="0.5" placeholder="0.0" value="${g.ovo_liquido||''}" oninput="S.gaiola.ovo_liquido=this.value"></div>
     <button class="btn-sub" onclick="subGaiola()">Registrar — Gaiola</button>
-    <div class="fnote">🔥 setDoc("entreposto","${ONTEM}_gaiola", {merge:true})</div>
+    <div class="fnote">🔥 setDoc("entreposto","${S.ed}_gaiola", {merge:true})</div>
   </div>`;
 }
 function renderSoltas(){
@@ -390,10 +394,11 @@ function renderSoltas(){
 // ── TAB 2: RAÇÃO ──────────────────────────────────────────────────────────────
 function t2(){
   return`
-    <div class="data-badge data-hoje">📅 Referente a hoje — ${HOJE_BR}</div>
     <div class="row-2">
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
-      <div class="form-group"><label>Data</label><input type="text" readonly value="${HOJE_BR}"></div>
+      <div class="form-group"><label>Data referente aos dados</label>
+        <input type="date" value="${S.racao.data}" max="${HOJE}" oninput="S.racao.data=this.value">
+      </div>
     </div>
     <div class="form-group"><label>Lote de destino</label>
       <select onchange="S.racao.lote=this.value"><option value="">Selecione o lote</option>
@@ -413,10 +418,12 @@ function t2(){
 function t3(){
   const trava=S.jaLancado.mort&&!S.override_mort;
   return`
-    <div class="data-badge data-ontem">📅 Referente ao dia anterior — ${ONTEM_BR}</div>
     <div class="row-2">
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
-      <div class="form-group"><label>Data</label><input type="text" readonly value="${ONTEM_BR}"></div>
+      <div class="form-group"><label>Data referente aos dados</label>
+        <input type="date" value="${S.md}" max="${HOJE}"
+          oninput="S.md=this.value;S.jaLancado.mort=null;S.override_mort=false;verificar('mortalidade',this.value).then(r=>{S.jaLancado.mort=r;render();})">
+      </div>
     </div>
     ${trava?travaCaixa(S.jaLancado.mort,'Mortalidade já lançada para ontem','S.override_mort=true;render()'):`
       ${S.override_mort&&S.jaLancado.mort?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
@@ -430,7 +437,7 @@ function t3(){
       </div>
       <div class="form-group" style="margin-top:14px"><label>Observações</label><textarea rows="2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;resize:vertical;font-family:inherit" placeholder="Opcional..." oninput="S.mo=this.value">${S.mo}</textarea></div>
       <button class="btn-sub" onclick="subMort()">Registrar mortalidade</button>`}
-    <div class="fnote">🔥 setDoc("mortalidade","${ONTEM}", {merge:true})</div>`;
+    <div class="fnote">🔥 setDoc("mortalidade","${S.md}", {merge:true})</div>`;
 }
 
 // ── TAB 4: CONFIG LOTES ───────────────────────────────────────────────────────
@@ -527,8 +534,8 @@ async function subGaiola(){
   if(!S.resp)return alert('Informe o responsável.');
   if(!S.gaiola.grande)return alert('Informe pelo menos a produção Grande.');
   try{
-    await db.collection('entreposto').doc(ONTEM+'_gaiola').set({
-      data:FS.Timestamp.fromDate(new Date(ONTEM+'T12:00:00')),
+    await db.collection('entreposto').doc(S.ed+'_gaiola').set({
+      data:FS.Timestamp.fromDate(new Date(S.ed+'T12:00:00')),
       grande:parseInt(S.gaiola.grande)||0,
       extra:parseInt(S.gaiola.extra)||0,
       jumbo:parseInt(S.gaiola.jumbo)||0,
@@ -540,7 +547,7 @@ async function subGaiola(){
     toast('✓ Gaiola registrada!');
     S.gaiola={grande:'',extra:'',jumbo:'',sem_class:'',ovo_liquido:''};
     S.aviario=null;S.override_gaiola=false;
-    S.jaLancado.gaiola=await verificar('entreposto',ONTEM+'_gaiola');render();
+    S.jaLancado.gaiola=await verificar('entreposto',S.ed+'_gaiola');render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
@@ -550,15 +557,15 @@ async function subSoltas(){
   const dados={};
   ls().forEach(l=>{const n=parseInt(S.sp['n_'+l.id])||0;const c=parseInt(S.sp['c_'+l.id])||0;dados[l.id]={ninho:n,chao:c,total:n+c};});
   try{
-    await db.collection('entreposto').doc(ONTEM+'_soltas').set({
-      data:FS.Timestamp.fromDate(new Date(ONTEM+'T12:00:00')),
+    await db.collection('entreposto').doc(S.ed+'_soltas').set({
+      data:FS.Timestamp.fromDate(new Date(S.ed+'T12:00:00')),
       galinhas_soltas:dados,
       responsavel:S.resp,
       timestamp_envio:FS.FieldValue.serverTimestamp(),
     });
     toast('✓ Galinhas soltas registradas!');
     S.sp={};S.aviario=null;S.override_soltas=false;
-    S.jaLancado.soltas=await verificar('entreposto',ONTEM+'_soltas');render();
+    S.jaLancado.soltas=await verificar('entreposto',S.ed+'_soltas');render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
@@ -566,13 +573,13 @@ async function subRacao(){
   if(!S.racao.lote||!S.racao.qtd)return alert('Selecione lote e quantidade.');
   try{
     await db.collection('racao').add({
-      data:FS.Timestamp.fromDate(new Date()),
+      data:FS.Timestamp.fromDate(new Date(S.racao.data+'T12:00:00')),
       lote:S.racao.lote,
       quantidade_kg:parseInt(S.racao.qtd),
       responsavel:S.resp,
       timestamp_envio:FS.FieldValue.serverTimestamp(),
     });
-    toast('✓ Batida registrada!');S.racao={lote:'',qtd:''};render();
+    toast('✓ Batida registrada!');S.racao={lote:'',qtd:'',data:HOJE};render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
@@ -581,8 +588,8 @@ async function subMort(){
   const lotes={};la().forEach(l=>{lotes[l.id]=parseInt(S.ml[l.id])||0;});
   const temps={};GALPOES.forEach(g=>{temps[g.id]={max:parseFloat(S.mt[g.id].max)||0,min:parseFloat(S.mt[g.id].min)||0};});
   try{
-    await db.collection('mortalidade').doc(ONTEM).set({
-      data:FS.Timestamp.fromDate(new Date(ONTEM+'T12:00:00')),
+    await db.collection('mortalidade').doc(S.md).set({
+      data:FS.Timestamp.fromDate(new Date(S.md+'T12:00:00')),
       responsavel:S.resp,
       timestamp_envio:FS.FieldValue.serverTimestamp(),
       lotes,temperaturas:temps,observacoes:S.mo
@@ -590,7 +597,7 @@ async function subMort(){
     toast('✓ Mortalidade registrada!');
     S.ml={};S.mo='';S.override_mort=false;
     S.mt={galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}};
-    S.jaLancado.mort=await verificar('mortalidade',ONTEM);render();
+    S.jaLancado.mort=await verificar('mortalidade',S.md);render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
