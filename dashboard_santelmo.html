@@ -211,23 +211,20 @@ document.getElementById('header-date').textContent=`Relatório — ${hLong.charA
 document.getElementById('footer-ts').textContent=hoje.toLocaleString('pt-BR');
 
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
-function fmtBR(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
-function semanas(c){return Math.floor((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));}
-function idealPct(gen,sem){const c=CURVAS[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)];}
-function lSem(labels){
-  // Insere ┊ antes de segundas-feiras
-  return labels.map((lb,i,arr)=>{
-    if(i===0)return lb;
-    // Tenta detectar virada de semana pela posição (assume labels em ordem cronológica)
-    return lb; // com dados reais, usar d.data.getDay()===1
-  });
+function fmtBR(d){
+  const dt = toDate(d) || d;
+  if(!dt || typeof dt.toLocaleDateString !== 'function') return '—';
+  return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
 }
 function labelsSemana(dados){
   return dados.map((d,i)=>{
-    const dia=d.data.getDay();const prev=i>0?dados[i-1].data.getDay():-1;
-    return(dia===1&&prev!==1&&i>0?'┊ ':'')+fmtBR(d.data);
+    const dt = toDate(d.data) || d.data;
+    if(!dt || typeof dt.getDay !== 'function') return fmtBR(d.data);
+    const dia=dt.getDay(); const prev=i>0?(toDate(dados[i-1].data)||dados[i-1].data).getDay?.()??-1:-1;
+    return(dia===1&&prev!==1&&i>0?'┊ ':'')+fmtBR(dt);
   });
-}
+}function semanas(c){return Math.floor((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));}
+function idealPct(gen,sem){const c=CURVAS[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)];}
 
 // ── FETCH FIRESTORE ───────────────────────────────────────────────────────────
 async function fetchLotes(){
