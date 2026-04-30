@@ -316,11 +316,72 @@ async function ST(i){
   render();
 }
 
-// ── RENDER ────────────────────────────────────────────────────────────────────
+// ── RENDER COM PRESERVAÇÃO DE FOCO ───────────────────────────────────────────
 function render(){
   if(!S.ready)return;
+  // Salva o elemento ativo e posição do cursor antes de recriar o DOM
+  const activeId   = document.activeElement?.id;
+  const activeVal  = document.activeElement?.value;
+  const selStart   = document.activeElement?.selectionStart;
   const map=[t0,t1,t2,t3,t4,t5];
   document.getElementById('content').innerHTML=map[S.tab]?.()??'';
+  // Restaura foco e posição do cursor
+  if(activeId){
+    const el=document.getElementById(activeId);
+    if(el){
+      el.focus();
+      if(selStart!==undefined&&el.setSelectionRange){
+        try{ el.setSelectionRange(selStart,selStart); }catch(e){}
+      }
+    }
+  }
+}
+
+// ── PRÉ-PREENCHIMENTO AO CORRIGIR ─────────────────────────────────────────────
+async function corrigirProd(){
+  const doc=S.jaLancado.prod;
+  if(doc?.lotes){
+    Object.entries(doc.lotes).forEach(([id,v])=>{
+      S.prod['f_'+id]=v.frente??'';
+      S.prod['b_'+id]=v.fundo??'';
+    });
+  }
+  S.override_prod=true; render();
+}
+async function corrigirGaiola(){
+  const doc=S.jaLancado.gaiola;
+  if(doc){
+    S.gaiola.grande       = doc.grande??'';
+    S.gaiola.extra        = doc.extra??'';
+    S.gaiola.jumbo        = doc.jumbo??'';
+    S.gaiola.sem_class    = doc.sem_classificacao??'';
+    S.gaiola.ovo_liquido  = doc.ovo_liquido??'';
+    S.resp = doc.responsavel||S.resp;
+  }
+  S.override_gaiola=true; render();
+}
+async function corrigirSoltas(){
+  const doc=S.jaLancado.soltas;
+  if(doc?.galinhas_soltas){
+    Object.entries(doc.galinhas_soltas).forEach(([id,v])=>{
+      S.sp['n_'+id]=v.ninho??'';
+      S.sp['c_'+id]=v.chao??'';
+    });
+    S.resp = doc.responsavel||S.resp;
+  }
+  S.override_soltas=true; render();
+}
+async function corrigirMort(){
+  const doc=S.jaLancado.mort;
+  if(doc){
+    if(doc.lotes) Object.entries(doc.lotes).forEach(([id,v])=>{ S.ml[id]=v??''; });
+    if(doc.temperaturas) Object.entries(doc.temperaturas).forEach(([gid,v])=>{
+      S.mt[gid]={max:v.max??'',min:v.min??''};
+    });
+    S.mo  = doc.observacoes||'';
+    S.resp= doc.responsavel||S.resp;
+  }
+  S.override_mort=true; render();
 }
 
 // ── TAB 0: PRODUTIVIDADE ──────────────────────────────────────────────────────
@@ -333,10 +394,10 @@ function t0(){
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
       <div class="form-group"><label>Data da coleta</label><input type="date" value="${S.pd}" max="${HOJE}" oninput="S.pd=this.value;S.jaLancado.prod=null;S.override_prod=false;verificar('produtividade',this.value).then(r=>{S.jaLancado.prod=r;render();})"></div>
     </div>
-    ${trava?travaCaixa(S.jaLancado.prod,'Já existe lançamento para esta data','S.override_prod=true;render()'):`
+    ${trava?travaCaixa(S.jaLancado.prod,'Já existe lançamento para esta data','corrigirProd()'):`
       <div class="stitle">Contagem de ovos por lote</div>
       ${S.override_prod&&S.jaLancado.prod?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
-      ${lps.map(l=>{const f=S.prod['f_'+l.id]??'';const b=S.prod['b_'+l.id]??'';const fa=f!==''&&(parseFloat(f)<0||parseFloat(f)>90);const ba=b!==''&&(parseFloat(b)<0||parseFloat(b)>90);return`<div class="prow"><div style="font-size:14px;font-weight:600;margin-bottom:2px">${l.nome}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${l.gen} · ${semanas(l.chegada)} semanas</div><div class="row-2"><div><label style="font-size:11px;margin-bottom:3px">Frente</label><input type="number" min="0" max="90" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value">${fa?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div><div><label style="font-size:11px;margin-bottom:3px">Fundo</label><input type="number" min="0" max="90" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value">${ba?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div></div></div>`;}).join('')}
+      ${lps.map(l=>{const f=S.prod['f_'+l.id]??'';const b=S.prod['b_'+l.id]??'';const fa=f!==''&&(parseFloat(f)<0||parseFloat(f)>90);const ba=b!==''&&(parseFloat(b)<0||parseFloat(b)>90);return`<div class="prow"><div style="font-size:14px;font-weight:600;margin-bottom:2px">${l.nome}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${l.gen} · ${semanas(l.chegada)} semanas</div><div class="row-2"><div><label style="font-size:11px;margin-bottom:3px">Frente</label><input id="pf_${l.id}" type="number" min="0" max="90" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value">${fa?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div><div><label style="font-size:11px;margin-bottom:3px">Fundo</label><input id="pb_${l.id}" type="number" min="0" max="90" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value">${ba?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div></div></div>`;}).join('')}
       <button class="btn-sub" onclick="subProd()">Registrar produtividade</button>`}`;
 }
 
@@ -368,26 +429,26 @@ function t1(){
     ${S.aviario==='gaiola'?renderGaiola():S.aviario==='soltas'?renderSoltas():`<div class="hint-box">Selecione o aviário para ver os campos. Cada aviário é registrado separadamente.</div>`}`;
 }
 function renderGaiola(){
-  if(S.jaLancado.gaiola&&!S.override_gaiola) return travaCaixa(S.jaLancado.gaiola,'Gaiola já lançada para ontem','S.override_gaiola=true;render()');
+  if(S.jaLancado.gaiola&&!S.override_gaiola) return travaCaixa(S.jaLancado.gaiola,'Gaiola já lançada para esta data','corrigirGaiola()');
   const g=S.gaiola;
   return`<div>
     ${S.override_gaiola&&S.jaLancado.gaiola?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
     <div class="stitle">Produção por categoria</div>
-    <div class="row-2">${['grande','extra','jumbo','sem_class'].map(k=>`<div class="form-group"><label>${k==='sem_class'?'Sem classificação':k.charAt(0).toUpperCase()+k.slice(1)}</label><input type="number" min="0" placeholder="0" value="${g[k]||''}" oninput="S.gaiola['${k}']=this.value"></div>`).join('')}</div>
-    <div class="form-group"><label>Ovo líquido (baldes)</label><input type="number" min="0" step="0.5" placeholder="0.0" value="${g.ovo_liquido||''}" oninput="S.gaiola.ovo_liquido=this.value"></div>
+    <div class="row-2">${['grande','extra','jumbo','sem_class'].map(k=>`<div class="form-group"><label>${k==='sem_class'?'Sem classificação':k.charAt(0).toUpperCase()+k.slice(1)}</label><input id="eg_${k}" type="number" min="0" placeholder="0" value="${g[k]||''}" oninput="S.gaiola['${k}']=this.value"></div>`).join('')}</div>
+    <div class="form-group"><label>Ovo líquido (baldes)</label><input id="eg_liq" type="number" min="0" step="0.5" placeholder="0.0" value="${g.ovo_liquido||''}" oninput="S.gaiola.ovo_liquido=this.value"></div>
     <button class="btn-sub" onclick="subGaiola()">Registrar — Gaiola</button>
     <div class="fnote">🔥 setDoc("entreposto","${S.ed}_gaiola", {merge:true})</div>
   </div>`;
 }
 function renderSoltas(){
   const lsArr=ls(); if(!lsArr.length)return`<div class="ibox">Nenhum lote de galinhas soltas ativo.</div>`;
-  if(S.jaLancado.soltas&&!S.override_soltas) return travaCaixa(S.jaLancado.soltas,'Galinhas soltas já lançadas para ontem','S.override_soltas=true;render()');
+  if(S.jaLancado.soltas&&!S.override_soltas) return travaCaixa(S.jaLancado.soltas,'Galinhas soltas já lançadas para esta data','corrigirSoltas()');
   return`<div>
     ${S.override_soltas&&S.jaLancado.soltas?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
     <div class="stitle">Ovos por lote</div>
-    ${lsArr.map(l=>{const n=S.sp['n_'+l.id]??'';const c=S.sp['c_'+l.id]??'';const tot=(n!==''&&c!=='')?parseInt(n||0)+parseInt(c||0):null;return`<div class="sbloco"><div style="font-size:13px;font-weight:600;color:#92400E;margin-bottom:10px">${l.nome} <span style="font-size:11px;color:var(--muted);font-weight:400">${l.gen}</span></div><div class="row-2"><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:3px">Ovos no ninho</label><input type="number" min="0" placeholder="0" value="${n}" oninput="S.sp['n_${l.id}']=this.value;render()"></div><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:3px">Ovos no chão</label><input type="number" min="0" placeholder="0" value="${c}" oninput="S.sp['c_${l.id}']=this.value;render()"></div></div>${tot!==null?`<div class="stot">Total: <strong>${tot} ovos</strong> · Ninho: ${tot>0?Math.round(parseInt(n||0)/tot*100):0}% · Chão: ${tot>0?Math.round(parseInt(c||0)/tot*100):0}%</div>`:''}</div>`;}).join('')}
+    ${lsArr.map(l=>{const n=S.sp['n_'+l.id]??'';const c=S.sp['c_'+l.id]??'';const tot=(n!==''&&c!=='')?parseInt(n||0)+parseInt(c||0):null;return`<div class="sbloco"><div style="font-size:13px;font-weight:600;color:#92400E;margin-bottom:10px">${l.nome} <span style="font-size:11px;color:var(--muted);font-weight:400">${l.gen}</span></div><div class="row-2"><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:3px">Ovos no ninho</label><input id="sn_${l.id}" type="number" min="0" placeholder="0" value="${n}" oninput="S.sp['n_${l.id}']=this.value"></div><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:3px">Ovos no chão</label><input id="sc_${l.id}" type="number" min="0" placeholder="0" value="${c}" oninput="S.sp['c_${l.id}']=this.value"></div></div>${tot!==null?`<div class="stot">Total: <strong>${tot} ovos</strong> · Ninho: ${tot>0?Math.round(parseInt(n||0)/tot*100):0}% · Chão: ${tot>0?Math.round(parseInt(c||0)/tot*100):0}%</div>`:''}</div>`;}).join('')}
     <button class="btn-sub amber" onclick="subSoltas()">Registrar — Galinhas soltas</button>
-    <div class="fnote">🔥 setDoc("entreposto","${ONTEM}_soltas", {merge:true})</div>
+    <div class="fnote">🔥 setDoc("entreposto","${S.ed}_soltas", {merge:true})</div>
   </div>`;
 }
 
@@ -425,15 +486,15 @@ function t3(){
           oninput="S.md=this.value;S.jaLancado.mort=null;S.override_mort=false;verificar('mortalidade',this.value).then(r=>{S.jaLancado.mort=r;render();})">
       </div>
     </div>
-    ${trava?travaCaixa(S.jaLancado.mort,'Mortalidade já lançada para ontem','S.override_mort=true;render()'):`
+    ${trava?travaCaixa(S.jaLancado.mort,'Mortalidade já lançada para esta data','corrigirMort()'):`
       ${S.override_mort&&S.jaLancado.mort?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
       <div class="stitle">Mortalidade por lote</div>
       <div><div style="display:grid;grid-template-columns:1fr 120px;gap:8px;padding:0 0 4px"><span></span><span style="font-size:11px;font-weight:600;color:var(--muted);text-align:center">MORTES</span></div>
-        ${la().map(l=>`<div class="lirow" style="grid-template-columns:1fr 120px"><span style="font-size:13px;font-weight:500">${l.nome}${l.tipo==='soltas'?` <span class="badge bs" style="font-size:10px">soltas</span>`:''} <small style="color:var(--muted);font-size:11px">${semanas(l.chegada)}sem</small></span><input type="number" min="0" max="99" placeholder="0" value="${S.ml[l.id]||''}" oninput="S.ml['${l.id}']=this.value"></div>`).join('')}
+        ${la().map(l=>`<div class="lirow" style="grid-template-columns:1fr 120px"><span style="font-size:13px;font-weight:500">${l.nome}${l.tipo==='soltas'?` <span class="badge bs" style="font-size:10px">soltas</span>`:''} <small style="color:var(--muted);font-size:11px">${semanas(l.chegada)}sem</small></span><input id="ml_${l.id}" type="number" min="0" max="99" placeholder="0" value="${S.ml[l.id]||''}" oninput="S.ml['${l.id}']=this.value"></div>`).join('')}
       </div>
       <div class="stitle">Temperatura dos galpões</div>
       <div><div style="display:grid;grid-template-columns:1fr 100px 100px;gap:8px;padding:0 0 4px"><span></span><span style="font-size:11px;font-weight:600;color:var(--muted);text-align:center">MÁX °C</span><span style="font-size:11px;font-weight:600;color:var(--muted);text-align:center">MÍN °C</span></div>
-        ${GALPOES.map(g=>`<div class="trow"><span style="font-size:13px;font-weight:500">${g.label}</span><input type="number" min="10" max="45" step="0.1" placeholder="--" value="${S.mt[g.id].max||''}" oninput="S.mt['${g.id}'].max=this.value"><input type="number" min="10" max="45" step="0.1" placeholder="--" value="${S.mt[g.id].min||''}" oninput="S.mt['${g.id}'].min=this.value"></div>`).join('')}
+        ${GALPOES.map(g=>`<div class="trow"><span style="font-size:13px;font-weight:500">${g.label}</span><input id="tmax_${g.id}" type="number" min="10" max="45" step="0.1" placeholder="--" value="${S.mt[g.id].max||''}" oninput="S.mt['${g.id}'].max=this.value"><input id="tmin_${g.id}" type="number" min="10" max="45" step="0.1" placeholder="--" value="${S.mt[g.id].min||''}" oninput="S.mt['${g.id}'].min=this.value"></div>`).join('')}
       </div>
       <div class="form-group" style="margin-top:14px"><label>Observações</label><textarea rows="2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;resize:vertical;font-family:inherit" placeholder="Opcional..." oninput="S.mo=this.value">${S.mo}</textarea></div>
       <button class="btn-sub" onclick="subMort()">Registrar mortalidade</button>`}
