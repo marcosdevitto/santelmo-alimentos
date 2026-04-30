@@ -243,16 +243,25 @@ async function fetchProdutividade(){
     .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(3).get();
   return snap.docs.map(d=>({id:d.id,...d.data()}));
 }
+// Converte qualquer formato de data do Firestore para objeto Date
+function toDate(v){
+  if(!v) return null;
+  if(v instanceof Date) return v;
+  if(typeof v.toDate === 'function') return v.toDate();
+  if(typeof v === 'string') return new Date(v+'T12:00:00');
+  if(typeof v === 'number') return new Date(v);
+  return null;
+}
+
 async function fetchEntreposto(limite=3){
   const snap=await db.collection('entreposto')
     .where(firebase.firestore.FieldPath.documentId(),'>=',addDays(hoje,-30).toISOString().split('T')[0]+'_')
     .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(limite*2).get();
-  // Agrupa gaiola+soltas por data base
   const porData={};
   snap.docs.forEach(d=>{
-    const partes=d.id.split('_'); // "2026-04-28_gaiola" ou "2026-04-28_soltas"
+    const partes=d.id.split('_');
     const dataBase=partes[0]; const tipo=partes[1];
-    if(!porData[dataBase])porData[dataBase]={id:dataBase,data:d.data().data?.toDate()||new Date(dataBase+'T12:00:00')};
+    if(!porData[dataBase])porData[dataBase]={id:dataBase,data:toDate(d.data().data)||new Date(dataBase+'T12:00:00')};
     if(tipo==='gaiola') Object.assign(porData[dataBase],d.data());
     if(tipo==='soltas') porData[dataBase].galinhas_soltas=d.data().galinhas_soltas||{};
   });
@@ -264,11 +273,12 @@ async function fetchRacao(){
     .where('data','>=',firebase.firestore.Timestamp.fromDate(dInicio))
     .orderBy('data').get();
   const dias={}; const dArr=[];
-  // Gera últimos 10 dias
   for(let i=9;i>=0;i--){const d=addDays(hoje,-(i+1));const k=d.toISOString().split('T')[0];dias[k]={data:d,lotes:{}};dArr.push(k);}
   snap.docs.forEach(d=>{
     const rec=d.data();
-    const k=rec.data.toDate().toISOString().split('T')[0];
+    const dt=toDate(rec.data);
+    if(!dt)return;
+    const k=dt.toISOString().split('T')[0];
     if(!dias[k])return;
     dias[k].lotes[rec.lote]=(dias[k].lotes[rec.lote]||0)+rec.quantidade_kg;
   });
@@ -280,7 +290,6 @@ async function fetchMortalidade(){
   return snap.docs.map(d=>({id:d.id,...d.data(),data:new Date(d.id+'T12:00:00')})).reverse();
 }
 async function fetchSoltas(){
-  // Busca dos documentos de entreposto com sufixo _soltas
   const snap=await db.collection('entreposto')
     .where(firebase.firestore.FieldPath.documentId(),'>=',addDays(hoje,-12).toISOString().split('T')[0]+'_soltas')
     .where(firebase.firestore.FieldPath.documentId(),'<=',HOJE_ISO+'_soltas')
