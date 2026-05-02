@@ -133,6 +133,10 @@ input[readonly]{background:#F3F4F6;color:var(--muted);cursor:default;border-colo
 .tbtn.ts{border-color:var(--amber);background:var(--amber-light);color:#92400E}
 .sync-btn{width:100%;padding:10px;background:transparent;border:1.5px solid var(--verde-border);border-radius:8px;color:var(--verde);font-size:13px;font-weight:500;cursor:pointer;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--sans)}
 .sync-btn:hover{background:var(--verde-light)}
+.dev-ok{color:#059669;font-weight:600}
+.dev-baixo{color:#DC2626;font-weight:600}
+.dev-alto{color:#D97706;font-weight:600}
+.dev-neutro{color:var(--muted)}
 
 /* Toast */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:white;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320px;text-align:center}
@@ -211,6 +215,69 @@ const CURVAS_BASE = {
   'Novogen Vermelha':{19:15.5,20:41.9,21:65,22:82.6,23:90.2,24:93.5,25:94.5,26:95.2,27:95.5,28:95.5,29:95.5,30:95.5,31:95.5,32:95.5,33:95.5,34:95.5,35:95.4,36:95.3,37:95.1,38:94.9,39:94.7,40:94.5,41:94.3,42:94,43:93.7,44:93.4,45:93.1,46:92.8,47:92.5,48:92.2,49:91.9,50:91.6,51:91.3,52:91,53:90.7,54:90.4,55:90.1,56:89.8,57:89.5,58:89.2,59:88.8,60:88.4,61:88,62:87.6,63:87.2,64:86.8,65:86.3,66:85.8,67:85.3,68:84.8,69:84.3,70:83.8,71:83.3,72:82.8,73:82.3,74:81.8,75:81.3,76:80.8,77:80.3,78:79.8,79:79.2,80:78.6,81:78,82:77.4,83:76.8,84:76.2,85:75.6,86:75,87:74.4,88:73.8,89:73.2,90:72.6,91:72,92:71.4,93:70.8,94:70.2,95:69.6}
 };
 
+// ── CURVAS DE PESO (Ave e Ovo) ────────────────────────────────────────────────
+const CURVAS_PESO = {
+  'Novogen Vermelha': {
+    ave_recria: {1:{min:65,max:70},2:{min:110,max:120},3:{min:180,max:190},4:{min:270,max:285},5:{min:365,max:385},6:{min:470,max:495},7:{min:570,max:600},8:{min:660,max:695},9:{min:750,max:790},10:{min:840,max:900},11:{min:930,max:990},12:{min:1020,max:1090},13:{min:1100,max:1170},14:{min:1180,max:1245},15:{min:1260,max:1330},16:{min:1340,max:1415},17:{min:1410,max:1490},18:{min:1480,max:1560}},
+    ave_prod: {18:1480,19:1550,20:1610,21:1655,22:1690,23:1710,24:1725,25:1735,26:1745,27:1755,28:1765,29:1770,30:1770,31:1775,32:1775,33:1775,34:1780,35:1780,36:1785,37:1785,38:1790,39:1790,40:1790,41:1795,42:1795,43:1800,44:1800,45:1800,46:1805,47:1805,48:1810,49:1810,50:1810,51:1815,52:1815,53:1815,54:1820,55:1820,56:1825,57:1825,58:1830,59:1830,60:1830,61:1835,62:1835,63:1840,64:1840,65:1840,66:1845,67:1845,68:1850,69:1850,70:1850,71:1855,72:1855,73:1860,74:1860,75:1860,76:1865,77:1865,78:1870,79:1870,80:1870,81:1870,82:1870,83:1870,84:1870,85:1870,86:1870,87:1870,88:1870,89:1870,90:1870,91:1870,92:1870,93:1870,94:1870,95:1870},
+    ovo: {19:41.6,20:45.6,21:48.6,22:51.6,23:53.6,24:55.4,25:56.6,26:57.6,27:58.5,28:59,29:59.4,30:59.8,31:60.3,32:60.6,33:60.8,34:61,35:61.3,36:61.5,37:61.7,38:61.8,39:61.9,40:62,41:62.2,42:62.3,43:62.4,44:62.5,45:62.6,46:62.7,47:62.8,48:62.9,49:63,50:63.1,51:63.3,52:63.4,53:63.5,54:63.6,55:63.7,56:63.7,57:63.8,58:63.8,59:63.9,60:63.9,61:64.1,62:64.1,63:64.2,64:64.2,65:64.3,66:64.3,67:64.4,68:64.4,69:64.5,70:64.5,71:64.7,72:64.7,73:64.8,74:64.8,75:64.8,76:64.9,77:64.9,78:65,79:65,80:65.1,81:65.2,82:65.3,83:65.3,84:65.4,85:65.4,86:65.5,87:65.5,88:65.6,89:65.6,90:65.7,91:65.7,92:65.8,93:65.8,94:65.8,95:65.9},
+  },
+  'Bovans': {
+    ave_recria: {1:{min:59,max:62},2:{min:117,max:123},3:{min:190,max:200},4:{min:258,max:272},5:{min:332,max:349},6:{min:410,max:431},7:{min:488,max:513},8:{min:566,max:595},9:{min:644,max:677},10:{min:722,max:759},11:{min:795,max:835},12:{min:873,max:917},13:{min:936,max:984},14:{min:1004,max:1056},15:{min:1068,max:1122},16:{min:1121,max:1179},17:{min:1175,max:1235},18:{min:1219,max:1281}},
+    ave_prod: {18:1250,19:1310,20:1370,21:1445,22:1495,23:1530,24:1550,25:1565,26:1580,27:1590,28:1602,29:1608,30:1616,31:1621,32:1626,33:1629,34:1632,35:1635,36:1638,37:1641,38:1644,39:1647,40:1650,41:1652,42:1654,43:1656,44:1658,45:1660,46:1661,47:1662,48:1663,49:1664,50:1665,51:1666,52:1667,53:1668,54:1669,55:1670,56:1671,57:1672,58:1673,59:1674,60:1675,61:1676,62:1677,63:1678,64:1679,65:1680,66:1681,67:1682,68:1683,69:1684,70:1685,71:1686,72:1687,73:1688,74:1689,75:1690,76:1691,77:1692,78:1693,79:1694,80:1695,81:1696,82:1697,83:1698,84:1699,85:1700,86:1700,87:1700,88:1700,89:1700,90:1700,91:1700,92:1700,93:1700,94:1700,95:1700,96:1700,97:1700,98:1700,99:1700,100:1700},
+    ovo: {18:40.1,19:43,20:46.1,21:48.6,22:50.8,23:52.7,24:54.4,25:55.7,26:56.7,27:57.6,28:58.3,29:58.9,30:59.4,31:59.8,32:60.1,33:60.3,34:60.5,35:60.7,36:60.9,37:61,38:61.2,39:61.3,40:61.5,41:61.6,42:61.7,43:61.8,44:61.9,45:62,46:62.1,47:62.1,48:62.2,49:62.3,50:62.4,51:62.4,52:62.5,53:62.6,54:62.6,55:62.7,56:62.7,57:62.8,58:62.8,59:62.9,60:62.9,61:63,62:63,63:63,64:63.1,65:63.1,66:63.1,67:63.1,68:63.1,69:63.1,70:63.1,71:63.2,72:63.2,73:63.2,74:63.2,75:63.2,76:63.2,77:63.2,78:63.2,79:63.2,80:63.2,81:63.3,82:63.3,83:63.3,84:63.3,85:63.3,86:63.3,87:63.3,88:63.3,89:63.3,90:63.3,91:63.4,92:63.4,93:63.4,94:63.4,95:63.4,96:63.4,97:63.4,98:63.4,99:63.4,100:63.4},
+  },
+  'H&N': {
+    ave_recria: {1:{min:65},2:{min:116},3:{min:175},4:{min:245},5:{min:325},6:{min:410},7:{min:496},8:{min:582},9:{min:665},10:{min:745},11:{min:822},12:{min:896},13:{min:967},14:{min:1035},15:{min:1101},16:{min:1168},17:{min:1235},18:{min:1300}},
+    ave_prod: {18:1358,19:1358,20:1408,21:1450,22:1486,23:1516,24:1540,25:1559,26:1574,27:1584,28:1590,29:1594,30:1597,31:1600,32:1603,33:1606,34:1609,35:1612,36:1615,37:1618,38:1621,39:1624,40:1626,41:1628,42:1630,43:1632,44:1634,45:1636,46:1638,47:1640,48:1642,49:1644,50:1646,51:1648,52:1650,53:1652,54:1654,55:1656,56:1658,57:1660,58:1662,59:1664,60:1666,61:1668,62:1670,63:1672,64:1674,65:1676,66:1678,67:1680,68:1682,69:1684,70:1686,71:1688,72:1690,73:1692,74:1694,75:1696,76:1698,77:1700,78:1702,79:1704,80:1705,81:1706,82:1707,83:1708,84:1709,85:1710,86:1711,87:1712,88:1713,89:1714,90:1715,91:1716,92:1717,93:1718,94:1719,95:1720,96:1721,97:1722,98:1723,99:1724,100:1725},
+    ovo: {19:40.8,20:43.7,21:46.3,22:48.7,23:50.8,24:52.6,25:54.2,26:55.4,27:56.4,28:57.1,29:57.7,30:58.2,31:58.7,32:59.1,33:59.5,34:59.8,35:60,36:60.3,37:60.4,38:60.6,39:60.8,40:60.9,41:61.1,42:61.2,43:61.4,44:61.5,45:61.6,46:61.8,47:61.9,48:62,49:62.1,50:62.3,51:62.4,52:62.5,53:62.6,54:62.7,55:62.8,56:62.9,57:63,58:63.1,59:63.1,60:63.2,61:63.3,62:63.4,63:63.4,64:63.5,65:63.6,66:63.6,67:63.7,68:63.7,69:63.8,70:63.8,71:63.9,72:63.9,73:63.9,74:64,75:64,76:64,77:64.1,78:64.1,79:64.1,80:64.1,81:64.1,82:64.2,83:64.2,84:64.2,85:64.2,86:64.2,87:64.2,88:64.2,89:64.2,90:64.2,91:64.2,92:64.2,93:64.2,94:64.2,95:64.2,96:64.2,97:64.2,98:64.2,99:64.2,100:64.2},
+  },
+  'Novogen Branca': {
+    ave_recria: {1:{min:70,max:75},2:{min:125,max:130},3:{min:190,max:200},4:{min:270,max:285},5:{min:345,max:365},6:{min:425,max:450},7:{min:500,max:530},8:{min:575,max:605},9:{min:650,max:685},10:{min:720,max:760},11:{min:790,max:835},12:{min:855,max:905},13:{min:920,max:970},14:{min:980,max:1035},15:{min:1045,max:1105},16:{min:1110,max:1170},17:{min:1170,max:1235},18:{min:1230,max:1300}},
+    ave_prod: {18:1230,19:1290,20:1335,21:1375,22:1420,23:1455,24:1485,25:1510,26:1535,27:1560,28:1575,29:1585,30:1595,31:1597,32:1600,33:1605,34:1610,35:1615,36:1619,37:1623,38:1627,39:1631,40:1635,41:1636,42:1636,43:1637,44:1637,45:1638,46:1638,47:1639,48:1639,49:1640,50:1640,51:1641,52:1641,53:1642,54:1642,55:1643,56:1643,57:1644,58:1644,59:1645,60:1645,61:1646,62:1647,63:1648,64:1649,65:1650,66:1651,67:1652,68:1653,69:1654,70:1655,71:1656,72:1657,73:1658,74:1659,75:1660,76:1661,77:1662,78:1663,79:1664,80:1665,81:1665,82:1665,83:1665,84:1665,85:1665,86:1665,87:1665,88:1665,89:1665,90:1665,91:1665,92:1665,93:1665,94:1665,95:1665,96:1665,97:1665,98:1665,99:1665,100:1665},
+    ovo: {19:42,20:47.5,21:50,22:51.6,23:53.1,24:54.2,25:55.4,26:56.3,27:57,28:57.6,29:58.1,30:58.6,31:59,32:59.4,33:59.7,34:59.9,35:60.1,36:60.3,37:60.5,38:60.6,39:60.7,40:60.8,41:60.9,42:61.1,43:61.3,44:61.5,45:61.7,46:61.8,47:61.9,48:62,49:62.2,50:62.3,51:62.4,52:62.5,53:62.6,54:62.7,55:62.8,56:62.9,57:63,58:63.1,59:63.2,60:63.3,61:63.4,62:63.5,63:63.6,64:63.7,65:63.8,66:63.8,67:63.9,68:63.9,69:64,70:64,71:64.1,72:64.1,73:64.2,74:64.2,75:64.3,76:64.3,77:64.4,78:64.4,79:64.5,80:64.5,81:64.6,82:64.6,83:64.7,84:64.7,85:64.8,86:64.8,87:64.9,88:64.9,89:65,90:65,91:65,92:65.1,93:65.1,94:65.1,95:65.2,96:65.2,97:65.2,98:65.3,99:65.3,100:65.3},
+  },
+  'Hisex': {
+    ave_recria: {1:{min:59,max:62},2:{min:117,max:123},3:{min:190,max:200},4:{min:258,max:272},5:{min:332,max:349},6:{min:410,max:431},7:{min:488,max:513},8:{min:566,max:595},9:{min:644,max:677},10:{min:722,max:759},11:{min:795,max:835},12:{min:873,max:917},13:{min:936,max:984},14:{min:1004,max:1056},15:{min:1068,max:1122},16:{min:1121,max:1179},17:{min:1175,max:1235},18:{min:1219,max:1281}},
+    ave_prod: {18:1250,19:1310,20:1370,21:1445,22:1495,23:1530,24:1550,25:1565,26:1580,27:1590,28:1602,29:1608,30:1616,31:1621,32:1626,33:1629,34:1632,35:1635,36:1638,37:1641,38:1644,39:1647,40:1650,41:1652,42:1654,43:1656,44:1658,45:1660,46:1661,47:1662,48:1663,49:1664,50:1665,51:1666,52:1667,53:1668,54:1669,55:1670,56:1671,57:1672,58:1673,59:1674,60:1675,61:1676,62:1677,63:1678,64:1679,65:1680,66:1681,67:1682,68:1683,69:1684,70:1685,71:1686,72:1687,73:1688,74:1689,75:1690,76:1691,77:1692,78:1693,79:1694,80:1695,81:1696,82:1697,83:1698,84:1699,85:1700,86:1700,87:1700,88:1700,89:1700,90:1700,91:1700,92:1700,93:1700,94:1700,95:1700,96:1700,97:1700,98:1700,99:1700,100:1700},
+    ovo: {18:40.8,19:43.2,20:46.1,21:48.7,22:50.9,23:52.8,24:54.5,25:55.8,26:56.8,27:57.7,28:58.4,29:59,30:59.5,31:59.9,32:60.2,33:60.4,34:60.6,35:60.8,36:60.9,37:61.1,38:61.3,39:61.4,40:61.5,41:61.6,42:61.8,43:61.9,44:61.9,45:62,46:62.1,47:62.2,48:62.3,49:62.4,50:62.4,51:62.5,52:62.6,53:62.6,54:62.7,55:62.8,56:62.8,57:62.9,58:62.9,59:62.9,60:63,61:63,62:63.1,63:63.1,64:63.1,65:63.1,66:63.2,67:63.2,68:63.2,69:63.2,70:63.2,71:63.2,72:63.2,73:63.2,74:63.2,75:63.3,76:63.3,77:63.3,78:63.3,79:63.3,80:63.3,81:63.3,82:63.3,83:63.3,84:63.3,85:63.4,86:63.4,87:63.4,88:63.4,89:63.4,90:63.4,91:63.4,92:63.4,93:63.4,94:63.4,95:63.5,96:63.5,97:63.5,98:63.5,99:63.5,100:63.5},
+  },
+};
+
+// ── HELPERS CURVAS PESO ───────────────────────────────────────────────────────
+function getIdealPeso(gen, sem, tipo){
+  const cp = CURVAS_PESO[gen]; if(!cp) return null;
+  const isRecria = sem <= 18;
+  if(tipo === 'ave'){
+    if(isRecria){
+      const ks = Object.keys(cp.ave_recria).map(Number).filter(k=>k<=sem);
+      if(!ks.length) return null;
+      return cp.ave_recria[Math.max(...ks)]; // {min, max?}
+    } else {
+      const ks = Object.keys(cp.ave_prod).map(Number).filter(k=>k<=sem);
+      if(!ks.length) return null;
+      return {min: cp.ave_prod[Math.max(...ks)]};
+    }
+  } else { // ovo
+    const ks = Object.keys(cp.ovo).map(Number).filter(k=>k<=sem);
+    if(!ks.length) return null;
+    return {min: cp.ovo[Math.max(...ks)]};
+  }
+}
+
+function classifyDev(val, ideal, isRecria){
+  if(!ideal || isNaN(val)) return {cls:'dev-neutro', label:'—'};
+  if(isRecria && ideal.max !== undefined){
+    if(val < ideal.min) return {cls:'dev-baixo', label:`${(val-ideal.min).toFixed(0)}g (abaixo do mín.)`};
+    if(val > ideal.max) return {cls:'dev-alto',  label:`+${(val-ideal.max).toFixed(0)}g (acima do máx.)`};
+    return {cls:'dev-ok', label:'dentro da faixa'};
+  } else {
+    const diff = val - ideal.min;
+    if(diff < 0) return {cls:'dev-baixo', label:`${diff.toFixed(1)}g (abaixo do mín.)`};
+    return {cls:'dev-ok', label:`+${diff.toFixed(1)}g`};
+  }
+}
+
 // ── CONSTANTES DE DATA ────────────────────────────────────────────────────────
 const agora   = new Date();
 const HOJE    = agora.toISOString().split('T')[0];
@@ -224,7 +291,7 @@ const GALPOES = [
   {id:'galpao_galinhas_soltas',label:'Galinhas Soltas'},
   {id:'galpao_recria',        label:'Galpão Recria'},
 ];
-const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Config. Lotes','Curvas'];
+const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas'];
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
 let S = {
@@ -244,6 +311,8 @@ let S = {
   override_mort: false, md: ONTEM,
   ml: {}, mo: '',
   mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
+  // peso
+  peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
   // config lotes
   showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:''},
   // curvas
@@ -319,22 +388,11 @@ async function ST(i){
 // ── RENDER COM PRESERVAÇÃO DE FOCO ───────────────────────────────────────────
 function render(){
   if(!S.ready)return;
-  // Salva o elemento ativo e posição do cursor antes de recriar o DOM
   const activeId   = document.activeElement?.id;
-  const activeVal  = document.activeElement?.value;
   const selStart   = document.activeElement?.selectionStart;
-  const map=[t0,t1,t2,t3,t4,t5];
+  const map=[t0,t1,t2,t3,tPeso,t4,t5];
   document.getElementById('content').innerHTML=map[S.tab]?.()??'';
-  // Restaura foco e posição do cursor
-  if(activeId){
-    const el=document.getElementById(activeId);
-    if(el){
-      el.focus();
-      if(selStart!==undefined&&el.setSelectionRange){
-        try{ el.setSelectionRange(selStart,selStart); }catch(e){}
-      }
-    }
-  }
+  if(activeId){const el=document.getElementById(activeId);if(el){el.focus();try{if(selStart!==undefined&&el.setSelectionRange)el.setSelectionRange(selStart,selStart);}catch(e){}}}
 }
 
 // ── PRÉ-PREENCHIMENTO AO CORRIGIR ─────────────────────────────────────────────
@@ -499,6 +557,169 @@ function t3(){
       <div class="form-group" style="margin-top:14px"><label>Observações</label><textarea rows="2" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;resize:vertical;font-family:inherit" placeholder="Opcional..." oninput="S.mo=this.value">${S.mo}</textarea></div>
       <button class="btn-sub" onclick="subMort()">Registrar mortalidade</button>`}
     <div class="fnote">🔥 setDoc("mortalidade","${S.md}", {merge:true})</div>`;
+}
+
+// ── TAB PESO ──────────────────────────────────────────────────────────────────
+function tPeso(){
+  const p=S.peso;
+  const lote=S.lotes.find(l=>l.id===p.loteId)||null;
+  const sem=lote?semanas(lote.chegada):null;
+  const isRecria=sem!==null&&sem<=18;
+  const ideal=lote?getIdealPeso(lote.gen,sem,p.tipo):null;
+  const isAve=p.tipo==='ave';
+
+  // Média das medições
+  const vals=p.medicoes.map(m=>parseFloat(m.val)).filter(v=>!isNaN(v)&&v>0);
+  const media=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+
+  // Referência ideal para o card
+  let idealTxt='—', idealDesc='';
+  if(ideal){
+    if(isAve&&isRecria&&ideal.max!==undefined){idealTxt=`${ideal.min}g – ${ideal.max}g`;idealDesc='faixa mín–máx';}
+    else if(isAve&&isRecria){idealTxt=`≥ ${ideal.min}g`;idealDesc='peso mínimo';}
+    else{idealTxt=`≥ ${ideal.min}${isAve?'g':'g'}`;idealDesc=isAve?'peso mínimo':'peso mínimo ovo';}
+  }
+
+  const diffMedia=media&&ideal?classifyDev(media,ideal,isRecria&&isAve):null;
+
+  return`
+    <div class="ibox">Selecione o tipo de pesagem e o lote. Lance cada medição individualmente — a média e o diagnóstico são calculados automaticamente.</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;${isAve?'border-color:var(--verde);background:var(--verde-light)':'background:#FAFFF9'}" onclick="S.peso.tipo='ave';S.peso.medicoes=[];render()">
+        ${isAve?`<div style="position:absolute;top:7px;right:7px;width:16px;height:16px;border-radius:50%;background:var(--verde);display:flex;align-items:center;justify-content:center;font-size:10px;color:white">✓</div>`:''}
+        <div style="font-size:20px;margin-bottom:4px">🐔</div>
+        <div style="font-size:13px;font-weight:500;${isAve?'color:var(--verde)':''}">Pesagem de aves</div>
+      </div>
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;${!isAve?'border-color:#D97706;background:#FFFBEB':'background:#FAFFF9'}" onclick="S.peso.tipo='ovo';S.peso.medicoes=[];render()">
+        <div style="font-size:20px;margin-bottom:4px">🥚</div>
+        <div style="font-size:13px;font-weight:500;${!isAve?'color:#D97706':''}">Pesagem de ovos</div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
+      <div class="form-group"><label>Data da pesagem</label><input type="date" value="${p.data}" max="${HOJE}" oninput="S.peso.data=this.value"></div>
+    </div>
+
+    <div class="form-group"><label>Lote</label>
+      <select onchange="S.peso.loteId=this.value;S.peso.medicoes=[];render()">
+        <option value="">— selecione o lote —</option>
+        ${la().map(l=>{const s=semanas(l.chegada);const f=s<=18?'Recria':'Produção';return`<option value="${l.id}"${p.loteId===l.id?' selected':''}>${l.nome} — ${l.gen} · ${s}sem (${f})</option>`}).join('')}
+      </select>
+    </div>
+
+    ${lote?`
+    <div style="border:1.5px solid var(--verde-border);border-radius:10px;padding:12px 14px;margin-bottom:14px;background:var(--verde-light);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:14px;font-weight:500">${lote.nome}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${lote.gen} · ${sem} semanas · ${isRecria?'Recria':'Produção'}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:17px;font-weight:500;color:var(--verde)">${idealTxt}</div>
+        <div style="font-size:11px;color:var(--muted)">${idealDesc||'sem curva'}</div>
+      </div>
+    </div>
+
+    <div class="stitle">Medições — g/${isAve?'ave':'ovo'}</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px">
+      <input id="inp-peso" type="number" min="0" step="0.1"
+        placeholder="${isAve?(isRecria?'ex: 850':'ex: 1870'):'ex: 63.5'}"
+        oninput="S.peso.inputVal=this.value"
+        onkeydown="if(event.key==='Enter')addPeso()">
+      <button style="padding:9px 16px;background:${isAve?'var(--verde)':'#D97706'};color:white;border:none;border-radius:var(--border);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:inherit" onclick="addPeso()">+ Adicionar</button>
+    </div>
+
+    ${p.medicoes.length>0?`
+    <div style="border:1px solid var(--verde-border);border-radius:8px;overflow:hidden;margin-bottom:14px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--verde-light)">
+          <th style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:left">#</th>
+          <th style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:right">Peso (g)</th>
+          <th style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:center">${isAve?(isRecria?'Status na faixa':'vs. mínimo'):'vs. ideal'}</th>
+          <th style="padding:7px 10px;text-align:center"></th>
+        </tr></thead>
+        <tbody>
+          ${p.medicoes.map((m,i)=>{
+            const v=parseFloat(m.val);
+            const d=ideal?classifyDev(v,ideal,isRecria&&isAve):{cls:'dev-neutro',label:'—'};
+            return`<tr style="border-top:1px solid var(--verde-border)">
+              <td style="padding:6px 10px;color:var(--muted);font-size:12px;font-family:monospace">${String(i+1).padStart(2,'0')}</td>
+              <td style="padding:6px 10px;text-align:right"><input id="pw_${m.id}" style="width:85px;padding:4px 7px;border:1.5px solid var(--verde-border);border-radius:5px;font-size:13px;text-align:right;background:var(--verde-light);font-family:inherit" type="number" step="0.1" value="${m.val}" onchange="editPeso(${m.id},this.value)"></td>
+              <td style="padding:6px 10px;text-align:center"><span class="${d.cls}" style="font-size:12px">${d.label}</span></td>
+              <td style="padding:6px 10px;text-align:center"><button style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:13px" onclick="delPeso(${m.id})">✕</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Medições</div>
+        <div style="font-size:20px;font-weight:500">${p.medicoes.length}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${isAve?'aves':'ovos'}</div>
+      </div>
+      <div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Média geral</div>
+        <div style="font-size:20px;font-weight:500">${media?media.toFixed(1):'—'}<span style="font-size:13px;font-weight:400">g</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">peso médio</div>
+      </div>
+      <div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">vs. ideal</div>
+        <div class="${diffMedia?.cls||'dev-neutro'}" style="font-size:16px">${diffMedia?.label||'—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${idealTxt}</div>
+      </div>
+    </div>
+
+    <button class="btn-sub" style="background:${isAve?'var(--verde)':'#D97706'}" onclick="subPeso()">
+      Registrar pesagem — ${lote.nome} (${p.medicoes.length} medições)
+    </button>`:`
+    <div style="text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;border:1px dashed var(--verde-border);border-radius:8px">
+      Nenhuma medição ainda.<br>Digite um peso e pressione <strong>Enter</strong> ou clique em "+ Adicionar".
+    </div>`}
+    `:`<div class="ibox">Selecione um lote para começar o lançamento.</div>`}`;
+}
+
+function addPeso(){
+  const v=parseFloat(S.peso.inputVal);
+  if(isNaN(v)||v<=0){document.getElementById('inp-peso')?.focus();return;}
+  S.peso.medicoes.push({id:S.peso.nextId++,val:String(v)});
+  S.peso.inputVal='';
+  render();
+  setTimeout(()=>{const el=document.getElementById('inp-peso');if(el){el.value='';el.focus();}},10);
+}
+function delPeso(id){S.peso.medicoes=S.peso.medicoes.filter(m=>m.id!==id);render();}
+function editPeso(id,val){const m=S.peso.medicoes.find(m=>m.id===id);if(m)m.val=val;}
+
+async function subPeso(){
+  if(!S.resp)return alert('Informe o responsável.');
+  if(!S.peso.loteId)return alert('Selecione o lote.');
+  if(!S.peso.medicoes.length)return alert('Adicione ao menos uma medição.');
+  const p=S.peso;
+  const lote=S.lotes.find(l=>l.id===p.loteId);
+  const sem=semanas(lote.chegada);
+  const vals=p.medicoes.map(m=>parseFloat(m.val)).filter(v=>!isNaN(v)&&v>0);
+  const media=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const docId=`${p.data}_${p.loteId}_${p.tipo}`;
+  try{
+    await db.collection('peso').doc(docId).set({
+      data:FS.Timestamp.fromDate(new Date(p.data+'T12:00:00')),
+      tipo:p.tipo,
+      lote:p.loteId,
+      lote_nome:lote.nome,
+      gen:lote.gen,
+      semanas:sem,
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+      medicoes:vals,
+      media:parseFloat(media.toFixed(2)),
+      total_medicoes:vals.length,
+    });
+    toast(`✓ Pesagem registrada! Média: ${media.toFixed(1)}g`);
+    S.peso={tipo:p.tipo,loteId:'',data:HOJE,medicoes:[],nextId:1,inputVal:''};
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
 }
 
 // ── TAB 4: CONFIG LOTES ───────────────────────────────────────────────────────
