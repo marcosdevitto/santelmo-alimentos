@@ -533,25 +533,56 @@ function renderProd(docs){
 // ── RENDER ENTREPOSTO ─────────────────────────────────────────────────────────
 function renderEntreposto(docs){
   if(!docs.length){document.getElementById('entre-body').innerHTML='<div class="empty">Nenhum registro encontrado.</div>';return;}
-  const ontem=docs[docs.length-1];
-  document.getElementById('entre-sub').textContent=`Ontem ${fmtBR(ontem.data)} · últimos ${docs.length} dias`;
-  const cats=[{k:'grande',l:'Grande'},{k:'extra',l:'Extra'},{k:'jumbo',l:'Jumbo'},{k:'sem_classificacao',l:'Sem cls.'},{k:'ovo_liquido',l:'Líquido'}];
-  const statsHTML=cats.map(c=>`<div class="stat-item"><div class="stat-val">${ontem[c.k]??0}</div><div class="stat-key">${c.l}</div></div>`).join('');
 
-  document.getElementById('entre-body').innerHTML=`<div class="stat-row">${statsHTML}</div><div class="chart-sm"><canvas id="chartEntreposto"></canvas></div>`;
+  // Calcula % média de cada categoria nos dias com dados
+  const cats=[{k:'grande',l:'Grande',c:'#1B4D35'},{k:'extra',l:'Extra',c:'#2D9A68'},{k:'jumbo',l:'Jumbo',c:'#60C48A'},{k:'sem_classificacao',l:'Sem cls.',c:'#A7F3D0'},{k:'ovo_liquido',l:'Líquido',c:'#D97706'}];
+  const diasComDados=docs.filter(d=>cats.some(c=>(d[c.k]||0)>0));
+  const nDias=diasComDados.length;
+  const mediaPcts=cats.map(c=>{
+    if(!nDias) return {pct:0,...c};
+    // soma total do dia → calcula % de cada categoria → tira média das %
+    const pctMedia=diasComDados.reduce((s,d)=>{
+      const tot=cats.reduce((st,cc)=>st+(d[cc.k]||0),0);
+      return s+(tot>0?((d[c.k]||0)/tot*100):0);
+    },0)/nDias;
+    return {pct:Math.round(pctMedia),...c};
+  });
+
+  const statsHTML=mediaPcts.map(c=>`
+    <div class="stat-item">
+      <div style="width:8px;height:8px;background:${c.c};border-radius:2px;margin:0 auto 5px"></div>
+      <div class="stat-val" style="color:${c.c};font-size:17px">${c.pct}%</div>
+      <div class="stat-key">${c.l}</div>
+    </div>`).join('');
+
+  // Barra proporcional das médias
+  const barraHTML=`<div style="height:7px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:12px">
+    ${mediaPcts.map(c=>`<div style="width:${c.pct}%;background:${c.c};min-width:${c.pct>0?1:0}px"></div>`).join('')}
+  </div>`;
+
+  document.getElementById('entre-sub').textContent=`Média % · últimos 10 dias · ${nDias} dias com lançamento`;
+  document.getElementById('entre-body').innerHTML=`
+    <div class="stat-row">${statsHTML}</div>
+    ${barraHTML}
+    <div class="chart-sm"><canvas id="chartEntreposto"></canvas></div>`;
 
   const eCores={grande:'#1B4D35',extra:'#2D9A68',jumbo:'#60C48A',sem_classificacao:'#A7F3D0',ovo_liquido:'#D97706'};
   const eCL={grande:'Grande',extra:'Extra',jumbo:'Jumbo',sem_classificacao:'Sem cls.',ovo_liquido:'Líquido'};
-  new Chart(document.getElementById('chartEntreposto'),{type:'bar',data:{labels:docs.map(e=>fmtBR(e.data)),datasets:Object.keys(eCores).map(k=>({label:eCL[k],data:docs.map(e=>e[k]||0),backgroundColor:eCores[k],borderRadius:0}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:9,family:'DM Mono'},boxWidth:7,boxHeight:7,padding:5}},tooltip:{bodyFont:{family:'DM Mono'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'}}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:10,family:'DM Mono'}}}}}});
+  new Chart(document.getElementById('chartEntreposto'),{type:'bar',data:{labels:docs.map(e=>fmtBR(e.data)),datasets:Object.keys(eCores).map(k=>({label:eCL[k],data:docs.map(e=>e[k]||0),backgroundColor:eCores[k],borderRadius:0}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:9,family:'DM Mono'},boxWidth:7,boxHeight:7,padding:5}},tooltip:{bodyFont:{family:'DM Mono'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:9,family:'DM Mono'},maxRotation:45}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:9,family:'DM Mono'}}}}}});
 }
 
 // ── RENDER GALINHAS SOLTAS ────────────────────────────────────────────────────
 function renderSoltas(dados){
   const temDados=dados.some(d=>d.total!==null);
   if(!temDados){document.getElementById('soltas-body').innerHTML='<div class="empty">Nenhum lançamento de galinhas soltas encontrado.</div>';return;}
-  const ult=dados.filter(d=>d.total!==null).slice(-1)[0];
-  const pN=ult&&ult.total>0?Math.round(ult.ninho/ult.total*100):0;
-  const pC=100-pN;
+
+  // Calcula média % dos 10 dias (só dias com dados)
+  const diasComDados=dados.filter(d=>d.total!==null&&d.total>0);
+  const mediaPctNinho=diasComDados.length
+    ? Math.round(diasComDados.reduce((s,d)=>s+(d.ninho/d.total*100),0)/diasComDados.length)
+    : 0;
+  const mediaPctChao=100-mediaPctNinho;
+  const nDias=diasComDados.length;
 
   const soltasPlugin={id:'sp',afterDatasetsDraw(chart){
     const{ctx,data}=chart;const n=dados.length;
@@ -590,10 +621,21 @@ function renderSoltas(dados){
   }};
 
   document.getElementById('soltas-body').innerHTML=`
-    <div class="soltas-summary">
-      <div class="soltas-stat"><div class="soltas-stat-label">Total ontem</div><div class="soltas-stat-val">${ult?.total??'—'} ovos</div></div>
-      <div class="soltas-stat"><div class="soltas-stat-label">No ninho</div><div class="soltas-stat-val">${ult?.ninho??'—'} ovos</div><div class="soltas-stat-sub">${pN}% do total</div></div>
-      <div class="soltas-stat"><div class="soltas-stat-label">No chão</div><div class="soltas-stat-val">${ult?.chao??'—'} ovos</div><div class="soltas-stat-sub">${pC}% do total</div></div>
+    <div class="soltas-summary" style="grid-template-columns:1fr 1fr">
+      <div class="soltas-stat">
+        <div class="soltas-stat-label">Média no ninho <span style="font-weight:400;opacity:.6">(${nDias} dias)</span></div>
+        <div class="soltas-stat-val" style="color:#7C3AED;font-size:28px">${mediaPctNinho}%</div>
+        <div class="soltas-stat-sub">dos ovos coletados nos últimos 10 dias</div>
+      </div>
+      <div class="soltas-stat">
+        <div class="soltas-stat-label">Média no chão <span style="font-weight:400;opacity:.6">(${nDias} dias)</span></div>
+        <div class="soltas-stat-val" style="color:#A78BFA;font-size:28px">${mediaPctChao}%</div>
+        <div class="soltas-stat-sub">dos ovos coletados nos últimos 10 dias</div>
+      </div>
+    </div>
+    <div style="height:8px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:14px">
+      <div style="width:${mediaPctNinho}%;background:#7C3AED;transition:width .3s"></div>
+      <div style="width:${mediaPctChao}%;background:#DDD6FE"></div>
     </div>
     <div class="chart-md"><canvas id="chartSoltas"></canvas></div>
     <div class="custom-legend" id="legend-soltas"></div>`;
@@ -750,7 +792,7 @@ async function carregar(){
     // 2. Todos os dados em paralelo
     const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados] = await Promise.all([
       fetchProdutividade(),
-      fetchEntreposto(3),
+      fetchEntreposto(10),
       fetchRacao(),
       fetchMortalidade(),
       fetchSoltas(),
