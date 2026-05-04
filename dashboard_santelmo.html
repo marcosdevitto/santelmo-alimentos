@@ -502,7 +502,9 @@ function renderProd(docs){
       const dataLanc=new Date(lanc.id+'T12:00:00');
       const semNaData=Math.floor((dataLanc-new Date(m.chegada+'T12:00:00'))/(7*24*60*60*1000))+1;
       const semAtual=semanas(m.chegada);
-      const media=(v.frente+v.fundo)/2; const prodP=(media/90)*100;
+      // Suporta formato novo (total ou frente+meio+fundo) e legado (frente+fundo sem meio)
+      const total=v.total!==undefined?v.total:(v.frente+(v.meio||0)+v.fundo);
+      const prodP=(total/360)*100;
       const idealV=idealPct(m.gen,semNaData); const diff=idealV!==null?prodP-idealV:null;
       const isUlt=lanc===ultimo;
       let diffH='<span class="no-data">—</span>';
@@ -513,7 +515,8 @@ function renderProd(docs){
         diffH=`<div class="diff-wrap"><span class="${cls}">${arr} ${diff>0?'+':''}${diff.toFixed(2)}%</span><div class="mini-bar"><div class="mini-bar-c"></div><div class="mini-bar-f" style="left:${bL};width:${p50}%;background:${diff>0?'#059669':'#DC2626'}"></div></div></div>`;
       }
       const dtag=!isUlt?`<span class="date-tag">${fmtBR(new Date(lanc.id+'T12:00:00'))}</span>`:'';
-      rowsData.push({nome:m.nome, html:`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${semAtual}sem atual · ideal da sem ${semNaData}</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td><td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${media.toFixed(1)}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`});
+      const meioCell=v.meio!==undefined?`<td style="color:var(--blue);font-weight:500">${v.meio}</td>`:'<td style="color:#D1D5DB">—</td>';
+      rowsData.push({nome:m.nome, html:`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${semAtual}sem · ideal sem ${semNaData}</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td>${meioCell}<td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${total}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`});
     });
   });
   // Ordena crescente pelo nome
@@ -523,7 +526,7 @@ function renderProd(docs){
   document.getElementById('prod-body').innerHTML=`
     <div class="prod-layout">
       <table class="prod-table">
-        <thead><tr><th>Lote</th><th style="color:var(--blue)">Frente</th><th style="color:var(--blue)">Fundo</th><th>Média</th><th>Produção %</th><th>Ideal %</th><th>Diferença</th></tr></thead>
+        <thead><tr><th>Lote</th><th style="color:var(--blue)">Frente</th><th style="color:var(--blue)">Meio</th><th style="color:var(--blue)">Fundo</th><th>Total</th><th>Produção %</th><th>Ideal %</th><th>Diferença</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="dias-box"><div class="dias-num">${dias}</div><div class="dias-label">dias desde<br>último<br>levantamento</div><div class="dias-ref">${fmtBR(new Date(ultimo.id+'T12:00:00'))}</div></div>

@@ -401,6 +401,7 @@ async function corrigirProd(){
   if(doc?.lotes){
     Object.entries(doc.lotes).forEach(([id,v])=>{
       S.prod['f_'+id]=v.frente??'';
+      S.prod['m_'+id]=v.meio??'';
       S.prod['b_'+id]=v.fundo??'';
     });
   }
@@ -454,8 +455,26 @@ function t0(){
     </div>
     ${trava?travaCaixa(S.jaLancado.prod,'Já existe lançamento para esta data','corrigirProd()'):`
       <div class="stitle">Contagem de ovos por lote</div>
+      <div class="ibox" style="font-size:11px">Produção % = (Frente + Meio + Fundo) ÷ 360 × 100</div>
       ${S.override_prod&&S.jaLancado.prod?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
-      ${lps.map(l=>{const f=S.prod['f_'+l.id]??'';const b=S.prod['b_'+l.id]??'';const fa=f!==''&&(parseFloat(f)<0||parseFloat(f)>90);const ba=b!==''&&(parseFloat(b)<0||parseFloat(b)>90);return`<div class="prow"><div style="font-size:14px;font-weight:600;margin-bottom:2px">${l.nome}</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${l.gen} · ${semanas(l.chegada)} semanas</div><div class="row-2"><div><label style="font-size:11px;margin-bottom:3px">Frente</label><input id="pf_${l.id}" type="number" min="0" max="90" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value">${fa?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div><div><label style="font-size:11px;margin-bottom:3px">Fundo</label><input id="pb_${l.id}" type="number" min="0" max="90" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value">${ba?`<div class="alr">Fora do intervalo (0–90)</div>`:''}</div></div></div>`;}).join('')}
+      ${lps.map(l=>{
+        const f=S.prod['f_'+l.id]??'';
+        const m=S.prod['m_'+l.id]??'';
+        const b=S.prod['b_'+l.id]??'';
+        const fv=parseFloat(f);const mv=parseFloat(m);const bv=parseFloat(b);
+        const totalPreview=(!isNaN(fv)&&!isNaN(mv)&&!isNaN(bv))?(fv+mv+bv):null;
+        const pctPreview=totalPreview!==null?(totalPreview/360*100).toFixed(2):null;
+        return`<div class="prow">
+          <div style="font-size:14px;font-weight:600;margin-bottom:2px">${l.nome}</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${l.gen} · ${semanas(l.chegada)} semanas</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+            <div><label style="font-size:11px;margin-bottom:3px;display:block;color:#1D4ED8;font-weight:600">Frente</label><input id="pf_${l.id}" type="number" min="0" max="120" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value;render()"></div>
+            <div><label style="font-size:11px;margin-bottom:3px;display:block;color:#1D4ED8;font-weight:600">Meio</label><input id="pm_${l.id}" type="number" min="0" max="120" placeholder="0" value="${m}" oninput="S.prod['m_${l.id}']=this.value;render()"></div>
+            <div><label style="font-size:11px;margin-bottom:3px;display:block;color:#1D4ED8;font-weight:600">Fundo</label><input id="pb_${l.id}" type="number" min="0" max="120" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value;render()"></div>
+          </div>
+          ${totalPreview!==null?`<div style="background:var(--verde-light);border:1px solid var(--verde-border);border-radius:6px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--muted)">Total: <strong style="color:var(--ink)">${totalPreview} ovos</strong></span><span style="font-size:14px;font-weight:600;color:var(--verde)">${pctPreview}%</span></div>`:''}
+        </div>`;
+      }).join('')}
       <button class="btn-sub" onclick="subProd()">Registrar produtividade</button>`}`;
 }
 
@@ -815,9 +834,17 @@ function travaCaixa(dados, titulo, onOverride){
 async function subProd(){
   if(!S.resp)return alert('Informe o responsável.');
   if(!S.pd)return alert('Selecione a data.');
-  for(const l of lp()){if((S.prod['f_'+l.id]??'')==''||(S.prod['b_'+l.id]??'')=='')return alert(`Preencha frente e fundo do ${l.nome}.`);}
+  for(const l of lp()){
+    if((S.prod['f_'+l.id]??'')==''||(S.prod['m_'+l.id]??'')==''||(S.prod['b_'+l.id]??'')=='')
+      return alert(`Preencha frente, meio e fundo do ${l.nome}.`);
+  }
   const lotes={};
-  lp().forEach(l=>{lotes[l.id]={frente:parseInt(S.prod['f_'+l.id]),fundo:parseInt(S.prod['b_'+l.id])};});
+  lp().forEach(l=>{
+    const f=parseInt(S.prod['f_'+l.id]);
+    const m=parseInt(S.prod['m_'+l.id]);
+    const b=parseInt(S.prod['b_'+l.id]);
+    lotes[l.id]={frente:f,meio:m,fundo:b,total:f+m+b};
+  });
   try{
     await db.collection('produtividade').doc(S.pd).set({
       data:FS.Timestamp.fromDate(new Date(S.pd+'T12:00:00')),
