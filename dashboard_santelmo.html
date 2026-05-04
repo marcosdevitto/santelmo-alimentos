@@ -38,20 +38,30 @@ const FIREBASE_CONFIG = {
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh}
-.header{background:var(--verde);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.15)}
-.header-left h1{font-family:var(--serif);font-size:21px;color:white}
-.header-left p{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px;font-family:var(--mono)}
-.header-right{display:flex;align-items:center;gap:12px}
+.header{background:var(--verde);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.header-left h1{font-family:var(--serif);font-size:18px;color:white}
+.header-left p{font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;font-family:var(--mono)}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media(min-width:900px){
+  .header{padding:18px 32px}
+  .header-left h1{font-size:21px}
+  .header-right{flex-wrap:nowrap;gap:12px}
+}
 .chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:white;font-size:11px;font-family:var(--mono);padding:5px 11px;border-radius:20px;display:flex;align-items:center;gap:6px}
 .dot{width:7px;height:7px;border-radius:50%;background:#4ADE80;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .btn-action{background:white;color:var(--verde);border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.1)}
 .btn-action:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .btn-action.loading{opacity:.7;pointer-events:none}
-.dashboard{padding:20px 28px;max-width:1400px;margin:0 auto}
-.grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px}
-.grid-2-eq{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
-.grid-1{margin-bottom:18px}
+.dashboard{padding:16px;max-width:1400px;margin:0 auto}
+.grid-2{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px}
+.grid-2-eq{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px}
+.grid-1{margin-bottom:16px}
+@media(min-width:900px){
+  .grid-2{grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px}
+  .grid-2-eq{grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+  .grid-1{margin-bottom:18px}
+}
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
 .card-title{font-family:var(--serif);font-size:17px;color:var(--ink);line-height:1.2}
@@ -336,7 +346,9 @@ function renderPesoTabela(registros, tipo, containerId){
   }
 
   const isAve = tipo==='ave';
-  const rows = registros.map(rec=>{
+  const rows = registros
+    .sort((a,b)=>(a.lote_nome||a.lote).localeCompare(b.lote_nome||b.lote,undefined,{numeric:true,sensitivity:'base'}))
+    .map(rec=>{
     const diasDesde = Math.floor((hoje - rec.dataObj)/(24*60*60*1000));
     const sem = rec.semanas; // semana NA COLETA — fixo
     const ideal = getIdealPeso(rec.gen, sem, tipo);
@@ -480,15 +492,16 @@ function renderProd(docs){
   const dias=Math.floor((hoje-new Date(ultimo.id+'T12:00:00'))/(24*60*60*1000));
   document.getElementById('prod-sub').textContent=`Último: ${new Date(ultimo.id+'T12:00:00').toLocaleDateString('pt-BR')} · ${Object.keys(ultimo.lotes||{}).length} lotes`;
 
-  let rows=''; const vistos=new Set();
+  // Coleta todos os dados primeiro, ordena depois
+  const rowsData = [];
+  const vistos=new Set();
   docs.forEach(lanc=>{
     Object.entries(lanc.lotes||{}).forEach(([id,v])=>{
       if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola')return; vistos.add(id);
       const m=META[id];
-      // Semana na data do levantamento — ideal fixo no momento da coleta
       const dataLanc=new Date(lanc.id+'T12:00:00');
       const semNaData=Math.floor((dataLanc-new Date(m.chegada+'T12:00:00'))/(7*24*60*60*1000))+1;
-      const semAtual=semanas(m.chegada); // só para exibir a idade atual
+      const semAtual=semanas(m.chegada);
       const media=(v.frente+v.fundo)/2; const prodP=(media/90)*100;
       const idealV=idealPct(m.gen,semNaData); const diff=idealV!==null?prodP-idealV:null;
       const isUlt=lanc===ultimo;
@@ -500,9 +513,12 @@ function renderProd(docs){
         diffH=`<div class="diff-wrap"><span class="${cls}">${arr} ${diff>0?'+':''}${diff.toFixed(2)}%</span><div class="mini-bar"><div class="mini-bar-c"></div><div class="mini-bar-f" style="left:${bL};width:${p50}%;background:${diff>0?'#059669':'#DC2626'}"></div></div></div>`;
       }
       const dtag=!isUlt?`<span class="date-tag">${fmtBR(new Date(lanc.id+'T12:00:00'))}</span>`:'';
-      rows+=`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${semAtual}sem atual · ideal da sem ${semNaData}</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td><td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${media.toFixed(1)}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`;
+      rowsData.push({nome:m.nome, html:`<tr><td><span class="lote-pill">${m.nome}</span>${dtag}<span class="gen-label">${m.gen} · ${semAtual}sem atual · ideal da sem ${semNaData}</span></td><td style="color:var(--blue);font-weight:500">${v.frente}</td><td style="color:var(--blue);font-weight:500">${v.fundo}</td><td>${media.toFixed(1)}</td><td>${prodP.toFixed(2)}%</td><td>${idealV!==null?idealV.toFixed(2)+'%':'<span class="no-data">—</span>'}</td><td>${diffH}</td></tr>`});
     });
   });
+  // Ordena crescente pelo nome
+  rowsData.sort((a,b)=>a.nome.localeCompare(b.nome,undefined,{numeric:true,sensitivity:'base'}));
+  let rows=rowsData.map(r=>r.html).join('');
 
   document.getElementById('prod-body').innerHTML=`
     <div class="prod-layout">
@@ -657,7 +673,7 @@ async function carregar(){
     // 1. Lotes e curvas
     const [lotes, curvas] = await Promise.all([fetchLotes(), fetchCurvas()]);
     CURVAS = curvas;
-    lotes.sort((a,b)=>a.nome.localeCompare(b.nome));
+    lotes.sort((a,b)=>a.nome.localeCompare(b.nome,undefined,{numeric:true,sensitivity:'base'}));
     lotes.forEach((l,i)=>{ META[l.id]=l; CORES[l.id]=CORES_FIXAS[i%CORES_FIXAS.length]; });
     LOTES        = lotes.map(l=>l.id);
     LOTES_GAIOLA = lotes.filter(l=>l.tipo==='gaiola').map(l=>l.id);
