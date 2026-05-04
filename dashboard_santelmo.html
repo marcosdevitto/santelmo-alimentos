@@ -189,6 +189,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
     <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Gaiola</div><div class="card-sub">Últimos 10 dias · temp. Galpão Produção</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortGaiola"></canvas></div><div class="custom-legend" id="legend-mort-gaiola"></div></div>
     <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Galinhas soltas</div><div class="card-sub">Últimos 10 dias · temp. Galpão Soltas</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortSoltas"></canvas></div><div class="custom-legend" id="legend-mort-soltas"></div></div>
   </div>
+  <div class="grid-2-eq">
+    <div class="card"><div class="card-header"><div><div class="card-title">Peso das aves</div><div class="card-sub">Último registro por lote · ideal fixo na semana da coleta</div></div><span class="card-tag tag-blue">Periódico</span></div><div id="peso-ave-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
+    <div class="card"><div class="card-header"><div><div class="card-title">Peso dos ovos</div><div class="card-sub">Último registro por lote · ideal fixo na semana da coleta</div></div><span class="card-tag tag-amber">Periódico</span></div><div id="peso-ovo-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
+  </div>
 </div>
 <div class="footer">Santelmo Alimentos · <span id="footer-ts"></span></div>
 </div><!-- /main-app -->
@@ -198,6 +202,56 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 firebase.initializeApp(FIREBASE_CONFIG);
 const db   = firebase.firestore();
 const auth = firebase.auth();
+
+// ── CURVAS DE PESO ────────────────────────────────────────────────────────────
+const CURVAS_PESO = {
+  'Novogen Vermelha': {
+    ave_recria:{1:{min:65,max:70},2:{min:110,max:120},3:{min:180,max:190},4:{min:270,max:285},5:{min:365,max:385},6:{min:470,max:495},7:{min:570,max:600},8:{min:660,max:695},9:{min:750,max:790},10:{min:840,max:900},11:{min:930,max:990},12:{min:1020,max:1090},13:{min:1100,max:1170},14:{min:1180,max:1245},15:{min:1260,max:1330},16:{min:1340,max:1415},17:{min:1410,max:1490},18:{min:1480,max:1560}},
+    ave_prod:{18:1480,19:1550,20:1610,21:1655,22:1690,23:1710,24:1725,25:1735,26:1745,27:1755,28:1765,29:1770,30:1770,31:1775,32:1775,33:1775,34:1780,35:1780,36:1785,37:1785,38:1790,39:1790,40:1790,41:1795,42:1795,43:1800,44:1800,45:1800,46:1805,47:1805,48:1810,49:1810,50:1810,51:1815,52:1815,53:1815,54:1820,55:1820,56:1825,57:1825,58:1830,59:1830,60:1830,61:1835,62:1835,63:1840,64:1840,65:1840,66:1845,67:1845,68:1850,69:1850,70:1850,71:1855,72:1855,73:1860,74:1860,75:1860,76:1865,77:1865,78:1870,79:1870,80:1870,81:1870,82:1870,83:1870,84:1870,85:1870,86:1870,87:1870,88:1870,89:1870,90:1870,91:1870,92:1870,93:1870,94:1870,95:1870},
+    ovo:{19:41.6,20:45.6,21:48.6,22:51.6,23:53.6,24:55.4,25:56.6,26:57.6,27:58.5,28:59,29:59.4,30:59.8,31:60.3,32:60.6,33:60.8,34:61,35:61.3,36:61.5,37:61.7,38:61.8,39:61.9,40:62,41:62.2,42:62.3,43:62.4,44:62.5,45:62.6,46:62.7,47:62.8,48:62.9,49:63,50:63.1,51:63.3,52:63.4,53:63.5,54:63.6,55:63.7,56:63.7,57:63.8,58:63.8,59:63.9,60:63.9,61:64.1,62:64.1,63:64.2,64:64.2,65:64.3,66:64.3,67:64.4,68:64.4,69:64.5,70:64.5,71:64.7,72:64.7,73:64.8,74:64.8,75:64.8,76:64.9,77:64.9,78:65,79:65,80:65.1,81:65.2,82:65.3,83:65.3,84:65.4,85:65.4,86:65.5,87:65.5,88:65.6,89:65.6,90:65.7,91:65.7,92:65.8,93:65.8,94:65.8,95:65.9},
+  },
+  'Bovans': {
+    ave_recria:{1:{min:59,max:62},2:{min:117,max:123},3:{min:190,max:200},4:{min:258,max:272},5:{min:332,max:349},6:{min:410,max:431},7:{min:488,max:513},8:{min:566,max:595},9:{min:644,max:677},10:{min:722,max:759},11:{min:795,max:835},12:{min:873,max:917},13:{min:936,max:984},14:{min:1004,max:1056},15:{min:1068,max:1122},16:{min:1121,max:1179},17:{min:1175,max:1235},18:{min:1219,max:1281}},
+    ave_prod:{18:1250,19:1310,20:1370,21:1445,22:1495,23:1530,24:1550,25:1565,26:1580,27:1590,28:1602,29:1608,30:1616,31:1621,32:1626,33:1629,34:1632,35:1635,36:1638,37:1641,38:1644,39:1647,40:1650,41:1652,42:1654,43:1656,44:1658,45:1660,46:1661,47:1662,48:1663,49:1664,50:1665,51:1666,52:1667,53:1668,54:1669,55:1670,56:1671,57:1672,58:1673,59:1674,60:1675,61:1676,62:1677,63:1678,64:1679,65:1680,66:1681,67:1682,68:1683,69:1684,70:1685,71:1686,72:1687,73:1688,74:1689,75:1690,76:1691,77:1692,78:1693,79:1694,80:1695,81:1696,82:1697,83:1698,84:1699,85:1700,86:1700,87:1700,88:1700,89:1700,90:1700,91:1700,92:1700,93:1700,94:1700,95:1700,96:1700,97:1700,98:1700,99:1700,100:1700},
+    ovo:{18:40.1,19:43,20:46.1,21:48.6,22:50.8,23:52.7,24:54.4,25:55.7,26:56.7,27:57.6,28:58.3,29:58.9,30:59.4,31:59.8,32:60.1,33:60.3,34:60.5,35:60.7,36:60.9,37:61,38:61.2,39:61.3,40:61.5,41:61.6,42:61.7,43:61.8,44:61.9,45:62,46:62.1,47:62.1,48:62.2,49:62.3,50:62.4,51:62.4,52:62.5,53:62.6,54:62.6,55:62.7,56:62.7,57:62.8,58:62.8,59:62.9,60:62.9,61:63,62:63,63:63,64:63.1,65:63.1,66:63.1,67:63.1,68:63.1,69:63.1,70:63.1,71:63.2,72:63.2,73:63.2,74:63.2,75:63.2,76:63.2,77:63.2,78:63.2,79:63.2,80:63.2,81:63.3,82:63.3,83:63.3,84:63.3,85:63.3,86:63.3,87:63.3,88:63.3,89:63.3,90:63.3,91:63.4,92:63.4,93:63.4,94:63.4,95:63.4,96:63.4,97:63.4,98:63.4,99:63.4,100:63.4},
+  },
+  'H&N': {
+    ave_recria:{1:{min:65},2:{min:116},3:{min:175},4:{min:245},5:{min:325},6:{min:410},7:{min:496},8:{min:582},9:{min:665},10:{min:745},11:{min:822},12:{min:896},13:{min:967},14:{min:1035},15:{min:1101},16:{min:1168},17:{min:1235},18:{min:1300}},
+    ave_prod:{18:1358,19:1358,20:1408,21:1450,22:1486,23:1516,24:1540,25:1559,26:1574,27:1584,28:1590,29:1594,30:1597,31:1600,32:1603,33:1606,34:1609,35:1612,36:1615,37:1618,38:1621,39:1624,40:1626,41:1628,42:1630,43:1632,44:1634,45:1636,46:1638,47:1640,48:1642,49:1644,50:1646,51:1648,52:1650,53:1652,54:1654,55:1656,56:1658,57:1660,58:1662,59:1664,60:1666,61:1668,62:1670,63:1672,64:1674,65:1676,66:1678,67:1680,68:1682,69:1684,70:1686,71:1688,72:1690,73:1692,74:1694,75:1696,76:1698,77:1700,78:1702,79:1704,80:1705,81:1706,82:1707,83:1708,84:1709,85:1710,86:1711,87:1712,88:1713,89:1714,90:1715,91:1716,92:1717,93:1718,94:1719,95:1720,96:1721,97:1722,98:1723,99:1724,100:1725},
+    ovo:{19:40.8,20:43.7,21:46.3,22:48.7,23:50.8,24:52.6,25:54.2,26:55.4,27:56.4,28:57.1,29:57.7,30:58.2,31:58.7,32:59.1,33:59.5,34:59.8,35:60,36:60.3,37:60.4,38:60.6,39:60.8,40:60.9,41:61.1,42:61.2,43:61.4,44:61.5,45:61.6,46:61.8,47:61.9,48:62,49:62.1,50:62.3,51:62.4,52:62.5,53:62.6,54:62.7,55:62.8,56:62.9,57:63,58:63.1,59:63.1,60:63.2,61:63.3,62:63.4,63:63.4,64:63.5,65:63.6,66:63.6,67:63.7,68:63.7,69:63.8,70:63.8,71:63.9,72:63.9,73:63.9,74:64,75:64,76:64,77:64.1,78:64.1,79:64.1,80:64.1,81:64.1,82:64.2,83:64.2,84:64.2,85:64.2,86:64.2,87:64.2,88:64.2,89:64.2,90:64.2,91:64.2,92:64.2,93:64.2,94:64.2,95:64.2,96:64.2,97:64.2,98:64.2,99:64.2,100:64.2},
+  },
+  'Novogen Branca': {
+    ave_recria:{1:{min:70,max:75},2:{min:125,max:130},3:{min:190,max:200},4:{min:270,max:285},5:{min:345,max:365},6:{min:425,max:450},7:{min:500,max:530},8:{min:575,max:605},9:{min:650,max:685},10:{min:720,max:760},11:{min:790,max:835},12:{min:855,max:905},13:{min:920,max:970},14:{min:980,max:1035},15:{min:1045,max:1105},16:{min:1110,max:1170},17:{min:1170,max:1235},18:{min:1230,max:1300}},
+    ave_prod:{18:1230,19:1290,20:1335,21:1375,22:1420,23:1455,24:1485,25:1510,26:1535,27:1560,28:1575,29:1585,30:1595,31:1597,32:1600,33:1605,34:1610,35:1615,36:1619,37:1623,38:1627,39:1631,40:1635,41:1636,42:1636,43:1637,44:1637,45:1638,46:1638,47:1639,48:1639,49:1640,50:1640,51:1641,52:1641,53:1642,54:1642,55:1643,56:1643,57:1644,58:1644,59:1645,60:1645,61:1646,62:1647,63:1648,64:1649,65:1650,66:1651,67:1652,68:1653,69:1654,70:1655,71:1656,72:1657,73:1658,74:1659,75:1660,76:1661,77:1662,78:1663,79:1664,80:1665,81:1665,82:1665,83:1665,84:1665,85:1665,86:1665,87:1665,88:1665,89:1665,90:1665,91:1665,92:1665,93:1665,94:1665,95:1665,96:1665,97:1665,98:1665,99:1665,100:1665},
+    ovo:{19:42,20:47.5,21:50,22:51.6,23:53.1,24:54.2,25:55.4,26:56.3,27:57,28:57.6,29:58.1,30:58.6,31:59,32:59.4,33:59.7,34:59.9,35:60.1,36:60.3,37:60.5,38:60.6,39:60.7,40:60.8,41:60.9,42:61.1,43:61.3,44:61.5,45:61.7,46:61.8,47:61.9,48:62,49:62.2,50:62.3,51:62.4,52:62.5,53:62.6,54:62.7,55:62.8,56:62.9,57:63,58:63.1,59:63.2,60:63.3,61:63.4,62:63.5,63:63.6,64:63.7,65:63.8,66:63.8,67:63.9,68:63.9,69:64,70:64,71:64.1,72:64.1,73:64.2,74:64.2,75:64.3,76:64.3,77:64.4,78:64.4,79:64.5,80:64.5,81:64.6,82:64.6,83:64.7,84:64.7,85:64.8,86:64.8,87:64.9,88:64.9,89:65,90:65,91:65,92:65.1,93:65.1,94:65.1,95:65.2,96:65.2,97:65.2,98:65.3,99:65.3,100:65.3},
+  },
+  'Hisex': {
+    ave_recria:{1:{min:59,max:62},2:{min:117,max:123},3:{min:190,max:200},4:{min:258,max:272},5:{min:332,max:349},6:{min:410,max:431},7:{min:488,max:513},8:{min:566,max:595},9:{min:644,max:677},10:{min:722,max:759},11:{min:795,max:835},12:{min:873,max:917},13:{min:936,max:984},14:{min:1004,max:1056},15:{min:1068,max:1122},16:{min:1121,max:1179},17:{min:1175,max:1235},18:{min:1219,max:1281}},
+    ave_prod:{18:1250,19:1310,20:1370,21:1445,22:1495,23:1530,24:1550,25:1565,26:1580,27:1590,28:1602,29:1608,30:1616,31:1621,32:1626,33:1629,34:1632,35:1635,36:1638,37:1641,38:1644,39:1647,40:1650,41:1652,42:1654,43:1656,44:1658,45:1660,46:1661,47:1662,48:1663,49:1664,50:1665,51:1666,52:1667,53:1668,54:1669,55:1670,56:1671,57:1672,58:1673,59:1674,60:1675,61:1676,62:1677,63:1678,64:1679,65:1680,66:1681,67:1682,68:1683,69:1684,70:1685,71:1686,72:1687,73:1688,74:1689,75:1690,76:1691,77:1692,78:1693,79:1694,80:1695,81:1696,82:1697,83:1698,84:1699,85:1700,86:1700,87:1700,88:1700,89:1700,90:1700,91:1700,92:1700,93:1700,94:1700,95:1700,96:1700,97:1700,98:1700,99:1700,100:1700},
+    ovo:{18:40.8,19:43.2,20:46.1,21:48.7,22:50.9,23:52.8,24:54.5,25:55.8,26:56.8,27:57.7,28:58.4,29:59,30:59.5,31:59.9,32:60.2,33:60.4,34:60.6,35:60.8,36:60.9,37:61.1,38:61.3,39:61.4,40:61.5,41:61.6,42:61.8,43:61.9,44:61.9,45:62,46:62.1,47:62.2,48:62.3,49:62.4,50:62.4,51:62.5,52:62.6,53:62.6,54:62.7,55:62.8,56:62.8,57:62.9,58:62.9,59:62.9,60:63,61:63,62:63.1,63:63.1,64:63.1,65:63.1,66:63.2,67:63.2,68:63.2,69:63.2,70:63.2,71:63.2,72:63.2,73:63.2,74:63.2,75:63.3,76:63.3,77:63.3,78:63.3,79:63.3,80:63.3,81:63.3,82:63.3,83:63.3,84:63.3,85:63.4,86:63.4,87:63.4,88:63.4,89:63.4,90:63.4,91:63.4,92:63.4,93:63.4,94:63.4,95:63.5,96:63.5,97:63.5,98:63.5,99:63.5,100:63.5},
+  },
+};
+
+// Retorna o ideal usando a semana NA COLETA (não a atual)
+function getIdealPeso(gen, semNaColeta, tipo){
+  const cp=CURVAS_PESO[gen]; if(!cp) return null;
+  const isRecria=semNaColeta<=18;
+  if(tipo==='ave'){
+    if(isRecria){
+      const ks=Object.keys(cp.ave_recria).map(Number).filter(k=>k<=semNaColeta);
+      if(!ks.length) return null;
+      return cp.ave_recria[Math.max(...ks)]; // {min, max?}
+    } else {
+      const ks=Object.keys(cp.ave_prod).map(Number).filter(k=>k<=semNaColeta);
+      if(!ks.length) return null;
+      return {min: cp.ave_prod[Math.max(...ks)]};
+    }
+  } else {
+    const ks=Object.keys(cp.ovo).map(Number).filter(k=>k<=semNaColeta);
+    if(!ks.length) return null;
+    return {min: cp.ovo[Math.max(...ks)]};
+  }
+}
 
 // ── CURVAS EMBUTIDAS (fallback se Firebase estiver vazio) ─────────────────────
 const CURVAS_BASE = {
@@ -256,7 +310,95 @@ async function fetchProdutividade(){
     .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(3).get();
   return snap.docs.map(d=>({id:d.id,...d.data()}));
 }
-// Converte qualquer formato de data do Firestore para objeto Date
+// ── FETCH PESO ────────────────────────────────────────────────────────────────
+async function fetchPeso(){
+  // Busca os últimos registros de peso — um por lote por tipo
+  const snap = await db.collection('peso')
+    .orderBy(firebase.firestore.FieldPath.documentId(),'desc')
+    .limit(100).get();
+
+  // Agrupa por lote+tipo, mantém apenas o mais recente
+  const porLoteTipo = {};
+  snap.docs.forEach(d=>{
+    const rec = d.data();
+    const key = `${rec.lote}_${rec.tipo}`;
+    if(!porLoteTipo[key]) porLoteTipo[key] = {id:d.id,...rec, dataObj: toDate(rec.data)||new Date(d.id.split('_')[0]+'T12:00:00')};
+  });
+  return Object.values(porLoteTipo);
+}
+
+// ── RENDER PESO ───────────────────────────────────────────────────────────────
+function renderPesoTabela(registros, tipo, containerId){
+  const el = document.getElementById(containerId);
+  if(!registros.length){
+    el.innerHTML='<div class="empty">Nenhum registro de peso encontrado.</div>';
+    return;
+  }
+
+  const isAve = tipo==='ave';
+  const rows = registros.map(rec=>{
+    const diasDesde = Math.floor((hoje - rec.dataObj)/(24*60*60*1000));
+    const sem = rec.semanas; // semana NA COLETA — fixo
+    const ideal = getIdealPeso(rec.gen, sem, tipo);
+    const media = rec.media;
+    const isRecria = sem <= 18;
+
+    // Texto do ideal
+    let idealTxt = '—';
+    if(ideal){
+      if(isAve && isRecria && ideal.max!==undefined) idealTxt=`${ideal.min}–${ideal.max}g`;
+      else idealTxt=`≥${ideal.min}g`;
+    }
+
+    // Diferença e cor
+    let diffHtml = '<span style="color:#9CA3AF">—</span>';
+    if(ideal && media){
+      if(isAve && isRecria && ideal.max!==undefined){
+        if(media<ideal.min){const d=(media-ideal.min).toFixed(1);diffHtml=`<span style="color:#DC2626;font-weight:600">${d}g</span>`;}
+        else if(media>ideal.max){const d=(media-ideal.max).toFixed(1);diffHtml=`<span style="color:#D97706;font-weight:600">+${d}g</span>`;}
+        else diffHtml=`<span style="color:#059669;font-weight:600">✓ ok</span>`;
+      } else {
+        const diff = media - ideal.min;
+        if(diff<0) diffHtml=`<span style="color:#DC2626;font-weight:600">${diff.toFixed(1)}g</span>`;
+        else diffHtml=`<span style="color:#059669;font-weight:600">+${diff.toFixed(1)}g</span>`;
+      }
+    }
+
+    // Badge de dias
+    const diasCls = diasDesde===0?'#059669':diasDesde<=7?'#D97706':'#6B7280';
+    const diasLabel = diasDesde===0?'hoje':diasDesde===1?'ontem':`${diasDesde}d atrás`;
+
+    return `<tr style="border-top:1px solid #F3F4F6">
+      <td style="padding:8px 10px">
+        <span style="display:inline-block;font-family:var(--mono);font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:#ECFDF5;color:#1B4D35">${rec.lote_nome||rec.lote}</span>
+        <span style="display:block;font-size:10px;color:#9CA3AF;margin-top:2px">${rec.gen}</span>
+      </td>
+      <td style="padding:8px 10px;text-align:center">
+        <span style="font-size:12px;color:#374151">${fmtBR(rec.dataObj)}</span>
+        <span style="display:block;font-size:10px;font-weight:600;color:${diasCls};margin-top:1px">${diasLabel}</span>
+      </td>
+      <td style="padding:8px 10px;text-align:center;font-family:var(--mono);font-size:11px;color:#6B7280">sem ${sem}</td>
+      <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:14px;font-weight:500">${media?media.toFixed(1)+'g':'—'}</td>
+      <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:#6B7280">${idealTxt}</td>
+      <td style="padding:8px 10px;text-align:right">${diffHtml}</td>
+      <td style="padding:8px 10px;text-align:center;font-size:11px;color:#9CA3AF">${rec.total_medicoes||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#F9FAFB">
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:left">Lote</th>
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:center">Coleta</th>
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:center">Semana</th>
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:right">Média</th>
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:right">Ideal</th>
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:right">Diferença</th>
+        <th style="font-family:var(--mono);font-size:10px;font-weight:500;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;padding:7px 10px;text-align:center">Amostras</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
 function toDate(v){
   if(!v) return null;
   if(v instanceof Date) return v;
@@ -522,12 +664,13 @@ async function carregar(){
     LOTES_SOLTAS = lotes.filter(l=>l.tipo==='soltas').map(l=>l.id);
 
     // 2. Todos os dados em paralelo
-    const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados] = await Promise.all([
+    const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados] = await Promise.all([
       fetchProdutividade(),
       fetchEntreposto(3),
       fetchRacao(),
       fetchMortalidade(),
       fetchSoltas(),
+      fetchPeso(),
     ]);
 
     // 3. Renderiza cada seção
@@ -537,6 +680,8 @@ async function carregar(){
     renderRacao(racaoDados);
     renderMortChart('chartMortGaiola','legend-mort-gaiola',mortDados,LOTES_GAIOLA,'galpao_producao');
     renderMortChart('chartMortSoltas','legend-mort-soltas',mortDados,LOTES_SOLTAS,'galpao_galinhas_soltas');
+    renderPesoTabela(pesoDados.filter(r=>r.tipo==='ave'), 'ave', 'peso-ave-body');
+    renderPesoTabela(pesoDados.filter(r=>r.tipo==='ovo'), 'ovo', 'peso-ovo-body');
 
     document.getElementById('chip-status').textContent='Firebase ✓';
     document.getElementById('footer-ts').textContent=new Date().toLocaleString('pt-BR');
