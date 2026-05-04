@@ -306,7 +306,7 @@ let S = {
   gaiola: {grande:'',extra:'',jumbo:'',sem_class:'',ovo_liquido:''},
   sp: {},
   // ração
-  racao: {lote:'', qtd:'', data: HOJE},
+  racao: {lote:'', qtd:'', data: HOJE, batidas: 1},
   // mortalidade
   override_mort: false, md: ONTEM,
   ml: {}, mo: '',
@@ -512,6 +512,9 @@ function renderSoltas(){
 
 // ── TAB 2: RAÇÃO ──────────────────────────────────────────────────────────────
 function t2(){
+  const batidas=S.racao.batidas||1;
+  const qtd=parseInt(S.racao.qtd)||0;
+  const total=qtd*batidas;
   return`
     <div class="row-2">
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
@@ -522,15 +525,30 @@ function t2(){
     <div class="form-group"><label>Lote de destino</label>
       <select onchange="S.racao.lote=this.value"><option value="">Selecione o lote</option>
         ${la().map(l=>`<option value="${l.id}"${S.racao.lote===l.id?' selected':''}>${l.nome} — ${l.gen}${l.tipo==='soltas'?' (soltas)':''}</option>`).join('')}
-      </select></div>
-    <div class="form-group"><label>Quantidade produzida</label>
+      </select>
+    </div>
+    <div class="form-group"><label>Quantidade por batida</label>
       <div style="display:flex;gap:10px">
         <div class="ropt${S.racao.qtd==='500'?' sel':''}" onclick="S.racao.qtd='500';render()">500 kg</div>
         <div class="ropt${S.racao.qtd==='1000'?' sel':''}" onclick="S.racao.qtd='1000';render()">1000 kg</div>
-      </div></div>
-    <div class="ibox" style="font-size:11px">Múltiplas batidas por dia são permitidas — cada envio cria um registro separado.</div>
-    <button class="btn-sub" onclick="subRacao()">Registrar batida</button>
-    <div class="fnote">🔥 addDoc("racao") — sem trava, múltiplas batidas esperadas.</div>`;
+      </div>
+    </div>
+    <div class="form-group"><label>Número de batidas</label>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button onclick="if(S.racao.batidas>1){S.racao.batidas--;render()}" style="width:36px;height:36px;border-radius:8px;border:1.5px solid var(--verde-border);background:var(--verde-light);color:var(--verde);font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
+        <span id="bat-num" style="font-family:var(--mono);font-size:28px;font-weight:500;color:var(--verde);min-width:32px;text-align:center">${batidas}</span>
+        <button onclick="S.racao.batidas=(S.racao.batidas||1)+1;render()" style="width:36px;height:36px;border-radius:8px;border:1.5px solid var(--verde-border);background:var(--verde-light);color:var(--verde);font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">+</button>
+        <span style="font-size:13px;color:var(--muted)">batida${batidas>1?'s':''}</span>
+      </div>
+    </div>
+    ${qtd&&batidas?`
+    <div style="background:var(--verde-light);border:1px solid var(--verde-border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;color:var(--verde)">${batidas} batida${batidas>1?'s':''} × ${qtd} kg</span>
+      <span style="font-size:20px;font-weight:600;color:var(--verde);font-family:var(--mono)">${total.toLocaleString('pt-BR')} kg total</span>
+    </div>`:''}
+    <div class="ibox" style="font-size:11px">Cada batida é salva como um registro separado no Firebase. Registrar ${batidas} batida${batidas>1?'s':''} criará ${batidas} registro${batidas>1?'s':''}.</div>
+    <button class="btn-sub" onclick="subRacao()">Registrar ${batidas} batida${batidas>1?'s':''} — ${total?total.toLocaleString('pt-BR')+' kg total':'selecione a quantidade'}</button>
+    <div class="fnote">🔥 addDoc("racao") × ${batidas} — sem trava, múltiplas batidas esperadas.</div>`;
 }
 
 // ── TAB 3: MORTALIDADE ────────────────────────────────────────────────────────
@@ -853,15 +871,23 @@ async function subSoltas(){
 
 async function subRacao(){
   if(!S.racao.lote||!S.racao.qtd)return alert('Selecione lote e quantidade.');
+  const batidas=S.racao.batidas||1;
+  const qtdKg=parseInt(S.racao.qtd);
   try{
-    await db.collection('racao').add({
-      data:FS.Timestamp.fromDate(new Date(S.racao.data+'T12:00:00')),
-      lote:S.racao.lote,
-      quantidade_kg:parseInt(S.racao.qtd),
-      responsavel:S.resp,
-      timestamp_envio:FS.FieldValue.serverTimestamp(),
-    });
-    toast('✓ Batida registrada!');S.racao={lote:'',qtd:'',data:HOJE};render();
+    const promises=[];
+    for(let i=0;i<batidas;i++){
+      promises.push(db.collection('racao').add({
+        data:FS.Timestamp.fromDate(new Date(S.racao.data+'T12:00:00')),
+        lote:S.racao.lote,
+        quantidade_kg:qtdKg,
+        responsavel:S.resp,
+        timestamp_envio:FS.FieldValue.serverTimestamp(),
+      }));
+    }
+    await Promise.all(promises);
+    const total=qtdKg*batidas;
+    toast(`✓ ${batidas} batida${batidas>1?'s':''} registrada${batidas>1?'s':''} — ${total.toLocaleString('pt-BR')} kg total!`);
+    S.racao={lote:'',qtd:'',data:HOJE,batidas:1};render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
