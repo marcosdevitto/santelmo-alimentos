@@ -141,6 +141,45 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 .user-info{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 10px;font-size:11px;color:white;font-family:var(--mono)}
 .btn-sair{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:7px;padding:5px 11px;font-size:11px;font-weight:500;color:white;cursor:pointer;font-family:var(--sans);transition:background .15s}
 .btn-sair:hover{background:rgba(255,255,255,.22)}
+
+/* Relatório overlay */
+.rel-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-start;justify-content:flex-end;padding:0}
+.rel-panel{background:var(--card);width:min(520px,100vw);height:100vh;overflow-y:auto;box-shadow:-4px 0 24px rgba(0,0,0,.2);display:flex;flex-direction:column}
+.rel-header{background:var(--verde);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:10}
+.rel-header h2{font-family:var(--serif);font-size:18px;color:white}
+.rel-header p{font-size:11px;color:rgba(255,255,255,.65);margin-top:2px;font-family:var(--mono)}
+.btn-fechar{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:6px 13px;font-size:13px;color:white;cursor:pointer;font-family:var(--sans)}
+.btn-fechar:hover{background:rgba(255,255,255,.25)}
+.rel-body{padding:16px 20px;flex:1}
+.rel-date-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.rel-date-row input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--ink);background:var(--bg);font-family:var(--sans);outline:none}
+.rel-date-row input:focus{border-color:var(--verde)}
+.rel-btn-buscar{padding:8px 18px;background:var(--verde);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.rel-btn-buscar:disabled{background:#9CA3AF;cursor:not-allowed}
+.rel-btn-copiar{padding:6px 13px;background:transparent;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--sans)}
+.rel-btn-copiar:hover{background:var(--verde-light);color:var(--verde);border-color:var(--verde-border)}
+.rel-sec{margin-bottom:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.rel-sec-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg)}
+.rel-sec-title{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink)}
+.rel-sec-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.rel-tag{font-size:10px;padding:2px 8px;border-radius:8px;font-weight:500}
+.rel-tag-ok{background:var(--verde-light);color:var(--verde);border:1px solid var(--verde-border)}
+.rel-tag-no{background:var(--amber-light);color:var(--amber);border:1px solid #FDE68A}
+.rel-row{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;border-top:1px solid var(--border);font-size:13px}
+.rel-lbl{color:var(--muted)}
+.rel-val{font-weight:500;color:var(--ink);font-family:var(--mono)}
+.rel-val-z{color:#D1D5DB;font-weight:400}
+.rel-stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px 14px;border-top:1px solid var(--border)}
+.rel-stat{background:var(--bg);border-radius:7px;padding:8px;text-align:center}
+.rel-stat-v{font-size:16px;font-weight:500;color:var(--verde);font-family:var(--mono)}
+.rel-stat-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.rel-bar{height:6px;border-radius:3px;overflow:hidden;display:flex;margin:8px 14px;border-radius:3px}
+.rel-note{font-size:11px;color:var(--muted);padding:6px 14px 10px;border-top:1px solid var(--border)}
+.rel-no-data{font-size:12px;color:var(--muted);font-style:italic;text-align:center;padding:16px;border-top:1px solid var(--border)}
+.rel-spinner{display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--muted);font-size:13px;font-family:var(--mono)}
+.rel-empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}
+.rel-header-date{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+
 </style>
 </head>
 <body>
@@ -168,6 +207,32 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 
 <div id="main-app" style="display:none">
 
+<!-- PAINEL DE RELATÓRIO DIÁRIO -->
+<div class="rel-overlay" id="rel-overlay" style="display:none" onclick="if(event.target===this)fecharRelatorio()">
+  <div class="rel-panel">
+    <div class="rel-header">
+      <div>
+        <h2>Relatório diário</h2>
+        <p id="rel-header-sub">Selecione uma data</p>
+      </div>
+      <button class="btn-fechar" onclick="fecharRelatorio()">✕ Fechar</button>
+    </div>
+    <div class="rel-body">
+      <div class="rel-date-row">
+        <input type="date" id="rel-data" value="" max="">
+        <button class="rel-btn-buscar" id="rel-btn-buscar" onclick="buscarRelatorio()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Buscar
+        </button>
+        <button class="rel-btn-copiar" id="rel-btn-copiar" style="display:none" onclick="copiarResumo()">Copiar resumo</button>
+      </div>
+      <div id="rel-content">
+        <div class="rel-empty-state">Escolha uma data e clique em Buscar para ver os dados do dia.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="header" id="dash-header">
   <div class="header-left">
     <h1>Santelmo Alimentos</h1>
@@ -177,6 +242,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
     <div class="chip"><span class="dot"></span><span id="chip-status">Conectando…</span></div>
     <div class="user-info" id="user-info"></div>
     <button class="btn-sair" onclick="sair()">Sair</button>
+    <button class="btn-action" onclick="abrirRelatorio()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Relatório
+    </button>
     <button class="btn-action" onclick="recarregar()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       Atualizar
@@ -836,6 +905,194 @@ async function salvarImagem(){
     btn.classList.remove('loading');
     btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Salvar imagem`;
   }
+}
+
+// ── RELATÓRIO DIÁRIO ──────────────────────────────────────────────────────────
+function abrirRelatorio(){
+  const overlay=document.getElementById('rel-overlay');
+  const inp=document.getElementById('rel-data');
+  inp.value=HOJE_ISO;
+  inp.max=HOJE_ISO;
+  overlay.style.display='flex';
+  document.body.style.overflow='hidden';
+}
+function fecharRelatorio(){
+  document.getElementById('rel-overlay').style.display='none';
+  document.body.style.overflow='';
+}
+
+async function buscarRelatorio(){
+  const data=document.getElementById('rel-data').value;
+  if(!data)return;
+  const btn=document.getElementById('rel-btn-buscar');
+  btn.disabled=true;btn.textContent='Buscando…';
+  document.getElementById('rel-content').innerHTML=`<div class="rel-spinner"><div class="spinner"></div>Carregando dados do dia…</div>`;
+  document.getElementById('rel-btn-copiar').style.display='none';
+
+  const dataBR=new Date(data+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'});
+  document.getElementById('rel-header-sub').textContent=dataBR.charAt(0).toUpperCase()+dataBR.slice(1);
+
+  try{
+    // Busca todos os documentos do dia em paralelo
+    const [docGaiola, docSoltas, docMort, docProd] = await Promise.all([
+      db.collection('entreposto').doc(data+'_gaiola').get(),
+      db.collection('entreposto').doc(data+'_soltas').get(),
+      db.collection('mortalidade').doc(data).get(),
+      db.collection('produtividade').doc(data).get(),
+    ]);
+
+    // Ração — busca por timestamp do dia
+    const dInicio=new Date(data+'T00:00:00');
+    const dFim   =new Date(data+'T23:59:59');
+    const racaoSnap=await db.collection('racao')
+      .where('data','>=',firebase.firestore.Timestamp.fromDate(dInicio))
+      .where('data','<=',firebase.firestore.Timestamp.fromDate(dFim))
+      .get();
+    const racaoDocs=racaoSnap.docs.map(d=>({id:d.id,...d.data()}));
+
+    // Peso — busca docs com prefixo da data
+    const pesoAveDoc=await db.collection('peso').where(firebase.firestore.FieldPath.documentId(),'>=',data+'_').where(firebase.firestore.FieldPath.documentId(),'<=',data+'_z').get();
+    const pesoDocs=pesoAveDoc.docs.map(d=>({id:d.id,...d.data()}));
+
+    renderRelatorio(data, dataBR, docGaiola, docSoltas, docMort, docProd, racaoDocs, pesoDocs);
+  }catch(e){
+    document.getElementById('rel-content').innerHTML=`<div class="rel-empty-state" style="color:var(--red)">Erro ao buscar dados: ${e.message}</div>`;
+  }finally{
+    btn.disabled=false;btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Buscar`;
+  }
+}
+
+function renderRelatorio(data, dataBR, docGaiola, docSoltas, docMort, docProd, racaoDocs, pesoDocs){
+  let html='';
+  let textoResumo=`📊 Relatório Santelmo — ${new Date(data+'T12:00:00').toLocaleDateString('pt-BR')}\n\n`;
+
+  // ── ENTREPOSTO ────────────────────────────────────────────────────────────
+  const gaiola=docGaiola.exists?docGaiola.data():null;
+  const tagE=gaiola?`<span class="rel-tag rel-tag-ok">lançado</span>`:`<span class="rel-tag rel-tag-no">sem lançamento</span>`;
+  html+=`<div class="rel-sec">
+    <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#1B4D35"></div>Entreposto</div>${tagE}</div>`;
+  if(gaiola){
+    const cats=[{k:'grande',l:'Grande'},{k:'extra',l:'Extra'},{k:'jumbo',l:'Jumbo'},{k:'sem_classificacao',l:'Sem cls.'},{k:'ovo_liquido',l:'Líquido'}];
+    const tot=cats.slice(0,4).reduce((s,c)=>s+(gaiola[c.k]||0),0);
+    html+=`<div class="rel-stat-grid">${cats.map(c=>`<div class="rel-stat"><div class="rel-stat-v">${gaiola[c.k]??0}</div><div class="rel-stat-l">${c.l}</div></div>`).join('')}</div>`;
+    const pcts=cats.map(c=>({c,pct:tot>0?Math.round((gaiola[c.k]||0)/tot*100):0}));
+    const bCores=['#1B4D35','#2D9A68','#60C48A','#A7F3D0','#D97706'];
+    html+=`<div class="rel-bar">${pcts.map((p,i)=>`<div style="width:${p.pct||1}%;background:${bCores[i]}"></div>`).join('')}</div>`;
+    html+=`<div class="rel-note">Resp.: ${gaiola.responsavel||'—'}</div>`;
+    textoResumo+=`🥚 Entreposto: Grande ${gaiola.grande||0} · Extra ${gaiola.extra||0} · Jumbo ${gaiola.jumbo||0} · Sem cls. ${gaiola.sem_classificacao||0}\n`;
+  }else{html+=`<div class="rel-no-data">Nenhum lançamento registrado</div>`;}
+  html+=`</div>`;
+
+  // ── GALINHAS SOLTAS ───────────────────────────────────────────────────────
+  const soltas=docSoltas.exists?docSoltas.data():null;
+  const tagS=soltas?`<span class="rel-tag rel-tag-ok">lançado</span>`:`<span class="rel-tag rel-tag-no">sem lançamento</span>`;
+  html+=`<div class="rel-sec">
+    <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#7C3AED"></div>Galinhas soltas</div>${tagS}</div>`;
+  if(soltas?.galinhas_soltas){
+    let nTotal=0,cTotal=0;
+    Object.values(soltas.galinhas_soltas).forEach(v=>{nTotal+=v.ninho||0;cTotal+=v.chao||0;});
+    const tot=nTotal+cTotal;const pN=tot>0?Math.round(nTotal/tot*100):0;const pC=100-pN;
+    html+=`<div class="rel-row"><span class="rel-lbl">No ninho</span><span class="rel-val">${nTotal.toLocaleString('pt-BR')} ovos <span style="color:var(--muted);font-weight:400">(${pN}%)</span></span></div>`;
+    html+=`<div class="rel-row"><span class="rel-lbl">No chão</span><span class="rel-val">${cTotal.toLocaleString('pt-BR')} ovos <span style="color:var(--muted);font-weight:400">(${pC}%)</span></span></div>`;
+    html+=`<div class="rel-bar"><div style="width:${pN}%;background:#7C3AED"></div><div style="width:${pC}%;background:#DDD6FE"></div></div>`;
+    html+=`<div class="rel-note">Total: ${tot.toLocaleString('pt-BR')} ovos · Resp.: ${soltas.responsavel||'—'}</div>`;
+    textoResumo+=`🐔 Galinhas soltas: ${tot.toLocaleString('pt-BR')} ovos (ninho ${pN}% · chão ${pC}%)\n`;
+  }else{html+=`<div class="rel-no-data">Nenhum lançamento registrado</div>`;}
+  html+=`</div>`;
+
+  // ── MORTALIDADE ───────────────────────────────────────────────────────────
+  const mort=docMort.exists?docMort.data():null;
+  const tagM=mort?`<span class="rel-tag rel-tag-ok">lançado</span>`:`<span class="rel-tag rel-tag-no">sem lançamento</span>`;
+  html+=`<div class="rel-sec">
+    <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#DC2626"></div>Mortalidade</div>${tagM}</div>`;
+  if(mort){
+    let totalMortes=0;
+    const lotesMort=mort.lotes||{};
+    // Ordena lotes por nome
+    const lotesOrdenados=Object.keys(lotesMort).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    lotesOrdenados.forEach(id=>{
+      const v=lotesMort[id]||0;totalMortes+=v;
+      const meta=META[id];const nome=meta?.nome||id;const isSoltas=meta?.tipo==='soltas';
+      html+=`<div class="rel-row"><span class="rel-lbl">${nome}${isSoltas?' <span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:4px">soltas</span>':''}</span><span class="${v>0?'rel-val':'rel-val-z'}">${v>0?v+' ave'+(v>1?'s':''):'0'}</span></div>`;
+    });
+    // Temperaturas
+    const temps=mort.temperaturas||{};
+    const galpoes=[{id:'galpao_producao',l:'Galpão Produção'},{id:'galpao_galinhas_soltas',l:'Galinhas Soltas'},{id:'galpao_recria',l:'Galpão Recria'}];
+    html+=`<div style="padding:6px 14px 2px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border)">Temperatura</div>`;
+    galpoes.forEach(g=>{
+      const t=temps[g.id];const hasT=t&&(t.max||t.min);
+      html+=`<div class="rel-row"><span class="rel-lbl">${g.l}</span><span class="${hasT?'rel-val':'rel-val-z'}">${hasT?`${t.max??'—'}° / ${t.min??'—'}°`:'não informada'}</span></div>`;
+    });
+    html+=`<div class="rel-note">Total: ${totalMortes} morte${totalMortes!==1?'s':''} · Resp.: ${mort.responsavel||'—'}</div>`;
+    textoResumo+=`☠️ Mortalidade: ${totalMortes} mort${totalMortes!==1?'es':'e'}\n`;
+  }else{html+=`<div class="rel-no-data">Nenhum lançamento registrado</div>`;}
+  html+=`</div>`;
+
+  // ── RAÇÃO ─────────────────────────────────────────────────────────────────
+  const tagR=racaoDocs.length?`<span class="rel-tag rel-tag-ok">${racaoDocs.length} batida${racaoDocs.length>1?'s':''}</span>`:`<span class="rel-tag rel-tag-no">sem lançamento</span>`;
+  html+=`<div class="rel-sec">
+    <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#D97706"></div>Ração</div>${tagR}</div>`;
+  if(racaoDocs.length){
+    // Agrupa por lote
+    const porLote={};
+    racaoDocs.forEach(r=>{if(!porLote[r.lote])porLote[r.lote]={kg:0,bat:0};porLote[r.lote].kg+=r.quantidade_kg||0;porLote[r.lote].bat++;});
+    const totalKg=Object.values(porLote).reduce((s,v)=>s+v.kg,0);
+    Object.keys(porLote).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).forEach(id=>{
+      const v=porLote[id];const nome=META[id]?.nome||id;
+      html+=`<div class="rel-row"><span class="rel-lbl">${nome} · ${v.bat} batida${v.bat>1?'s':''}</span><span class="rel-val">${v.kg.toLocaleString('pt-BR')} kg</span></div>`;
+    });
+    html+=`<div class="rel-note">Total: ${totalKg.toLocaleString('pt-BR')} kg · ${racaoDocs.length} batida${racaoDocs.length>1?'s':''}</div>`;
+    textoResumo+=`🌾 Ração: ${totalKg.toLocaleString('pt-BR')} kg (${racaoDocs.length} batidas)\n`;
+  }else{html+=`<div class="rel-no-data">Nenhuma batida registrada</div>`;}
+  html+=`</div>`;
+
+  // ── PRODUTIVIDADE ─────────────────────────────────────────────────────────
+  const prod=docProd.exists?docProd.data():null;
+  const tagP=prod?`<span class="rel-tag rel-tag-ok">lançado</span>`:`<span class="rel-tag rel-tag-no">sem lançamento</span>`;
+  html+=`<div class="rel-sec">
+    <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#1D4ED8"></div>Produtividade</div>${tagP}</div>`;
+  if(prod?.lotes){
+    Object.keys(prod.lotes).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).forEach(id=>{
+      const v=prod.lotes[id];const meta=META[id];
+      const total=v.total!==undefined?v.total:(v.frente+(v.meio||0)+v.fundo);
+      const pct=(total/360*100).toFixed(2);
+      html+=`<div class="rel-row">
+        <span class="rel-lbl">${meta?.nome||id} <span style="color:var(--muted);font-size:11px">${v.frente}/${v.meio??'—'}/${v.fundo}</span></span>
+        <span class="rel-val">${pct}%</span>
+      </div>`;
+    });
+    html+=`<div class="rel-note">Resp.: ${prod.responsavel||'—'}</div>`;
+  }else{html+=`<div class="rel-no-data">Nenhum levantamento registrado</div>`;}
+  html+=`</div>`;
+
+  // ── PESAGEM ───────────────────────────────────────────────────────────────
+  const tagPe=pesoDocs.length?`<span class="rel-tag rel-tag-ok">${pesoDocs.length} registro${pesoDocs.length>1?'s':''}</span>`:`<span class="rel-tag rel-tag-no">sem lançamento</span>`;
+  html+=`<div class="rel-sec">
+    <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#6D28D9"></div>Pesagem</div>${tagPe}</div>`;
+  if(pesoDocs.length){
+    pesoDocs.sort((a,b)=>(a.lote_nome||a.lote).localeCompare(b.lote_nome||b.lote,undefined,{numeric:true})).forEach(p=>{
+      const isAve=p.tipo==='ave';
+      html+=`<div class="rel-row">
+        <span class="rel-lbl">${p.lote_nome||p.lote} · ${isAve?'ave':'ovo'} · sem ${p.semanas} · ${p.total_medicoes} amostras</span>
+        <span class="rel-val">${p.media?.toFixed(1)}g</span>
+      </div>`;
+    });
+  }else{html+=`<div class="rel-no-data">Nenhuma pesagem registrada</div>`;}
+  html+=`</div>`;
+
+  document.getElementById('rel-content').innerHTML=html;
+  document.getElementById('rel-btn-copiar').style.display='block';
+
+  // Salva o texto para copiar
+  window._relTexto=textoResumo;
+}
+
+function copiarResumo(){
+  if(!window._relTexto)return;
+  navigator.clipboard.writeText(window._relTexto).then(()=>{
+    const btn=document.getElementById('rel-btn-copiar');
+    btn.textContent='✓ Copiado!';setTimeout(()=>btn.textContent='Copiar resumo',2000);
+  });
 }
 
 // ── AUTENTICAÇÃO ──────────────────────────────────────────────────────────────
