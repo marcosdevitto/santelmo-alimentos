@@ -651,6 +651,7 @@ function renderEntreposto(docs){
 
   const eCores={grande:'#1B4D35',extra:'#2D9A68',jumbo:'#60C48A',sem_classificacao:'#A7F3D0',ovo_liquido:'#D97706'};
   const eCL={grande:'Grande',extra:'Extra',jumbo:'Jumbo',sem_classificacao:'Sem cls.',ovo_liquido:'Líquido'};
+  const existeE=Chart.getChart('chartEntreposto');if(existeE)existeE.destroy();
   new Chart(document.getElementById('chartEntreposto'),{type:'bar',data:{labels:docs.map(e=>fmtBR(e.data)),datasets:Object.keys(eCores).map(k=>({label:eCL[k],data:docs.map(e=>e[k]||0),backgroundColor:eCores[k],borderRadius:0}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:9,family:'DM Mono'},boxWidth:7,boxHeight:7,padding:5}},tooltip:{bodyFont:{family:'DM Mono'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:9,family:'DM Mono'},maxRotation:45}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:9,family:'DM Mono'}}}}}});
 }
 
@@ -723,6 +724,7 @@ function renderSoltas(dados){
     <div class="chart-md"><canvas id="chartSoltas"></canvas></div>
     <div class="custom-legend" id="legend-soltas"></div>`;
 
+  const existeS=Chart.getChart('chartSoltas');if(existeS)existeS.destroy();
   new Chart(document.getElementById('chartSoltas'),{type:'bar',plugins:[soltasPlugin],data:{labels:labelsSemana(dados),datasets:[{label:'Ninho',data:dados.map(d=>d.ninho||0),backgroundColor:'#7C3AED',borderRadius:0},{label:'Chão',data:dados.map(d=>d.chao||0),backgroundColor:'#DDD6FE',borderRadius:0}]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'},maxRotation:0}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:10,family:'DM Mono'},stepSize:10}}}}});
 
   const lsEl=document.getElementById('legend-soltas');
@@ -765,6 +767,7 @@ function renderRacao(dados){
     });
   }};
 
+  const existeR=Chart.getChart('chartRacao');if(existeR)existeR.destroy();
   new Chart(document.getElementById('chartRacao'),{type:'bar',plugins:[racaoPlugin],data:{labels:labelsSemana(dados),datasets:LOTES.map(l=>({label:META[l].nome,data:dados.map(d=>d.lotes[l]||0),backgroundColor:CORES[l],borderRadius:0}))},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20}},plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'},callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.raw} kg`}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'},maxRotation:0}},y:{stacked:true,grid:{color:'#F0F4F2'},ticks:{font:{size:10,family:'DM Mono'},callback:v=>v+'kg'}}}}});
 
   const lrEl=document.getElementById('legend-racao');lrEl.innerHTML='';
@@ -852,6 +855,7 @@ function renderMortChart(canvasId, legendId, dados, lotesGrupo, galpaoTemp){
   const barDS=lotesGrupo.map(l=>({type:'bar',label:META[l]?.nome||l,data:dados.map(d=>(d.lotes||{})[l]||0),backgroundColor:CORES[l]||'#999',yAxisID:'y',borderRadius:0,order:2}));
   const tempMax={type:'line',label:'Temp máx',data:dados.map(d=>{const v=(d.temperaturas||{})[galpaoTemp]?.max;return(v!==null&&v!==undefined)?v:null;}),borderColor:'#EF4444',borderWidth:2,pointRadius:3,pointBackgroundColor:'#EF4444',tension:.3,yAxisID:'y1',order:1,fill:false,spanGaps:false};
   const tempMin={type:'line',label:'Temp mín',data:dados.map(d=>{const v=(d.temperaturas||{})[galpaoTemp]?.min;return(v!==null&&v!==undefined)?v:null;}),borderColor:'#60A5FA',borderWidth:2,pointRadius:3,pointBackgroundColor:'#60A5FA',borderDash:[4,3],tension:.3,yAxisID:'y1',order:1,fill:false,spanGaps:false};
+  const existeC=Chart.getChart(canvasId);if(existeC)existeC.destroy();
   new Chart(document.getElementById(canvasId),{type:'bar',plugins:[buildMortPlugin(lotesGrupo)],data:{labels:labelsSemana(dados),datasets:[...barDS,tempMax,tempMin]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'},callbacks:{label:ctx=>{if(ctx.dataset.label.startsWith('Temp'))return ` ${ctx.dataset.label}: ${ctx.raw}°C`;return ` ${ctx.dataset.label}: ${ctx.raw} ave${ctx.raw!==1?'s':''}`;}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10,family:'DM Mono'},maxRotation:0}},y:{stacked:true,position:'left',grid:{color:'#F0F4F2'},title:{display:true,text:'Mortes',font:{size:9,family:'DM Mono'},color:'#5A7065'},ticks:{font:{size:10,family:'DM Mono'},stepSize:1}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'°C',font:{size:9,family:'DM Mono'}},ticks:{font:{size:10,family:'DM Mono'},callback:v=>v+'°'}}}}});
   const el=document.getElementById(legendId);el.innerHTML='';
   lotesGrupo.forEach(l=>{const d=document.createElement('div');d.className='legend-item';d.innerHTML=`<div class="legend-dot" style="background:${CORES[l]||'#999'}"></div>${META[l]?.nome||l}`;el.appendChild(d);});
@@ -902,7 +906,12 @@ async function carregar(){
   }
 }
 
-function recarregar(){ Chart.instances&&Object.values(Chart.instances).forEach(c=>c.destroy&&c.destroy()); carregar(); }
+function recarregar(){
+  // Destrói todos os gráficos existentes antes de recriar
+  Object.values(Chart.instances||{}).forEach(c=>{try{c.destroy();}catch(e){}});
+  // Aguarda um frame para garantir que o canvas foi liberado
+  requestAnimationFrame(()=>carregar());
+}
 
 // ── SALVAR IMAGEM ─────────────────────────────────────────────────────────────
 async function salvarImagem(){
