@@ -365,7 +365,13 @@ function labelsSemana(dados){
     const dia=dt.getDay(); const prev=i>0?(toDate(dados[i-1].data)||dados[i-1].data).getDay?.()??-1:-1;
     return(dia===1&&prev!==1&&i>0?'┊ ':'')+fmtBR(dt);
   });
-}function semanas(c){const d=Math.ceil((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));return d<1?1:d;}
+}function semanas(c){
+  const chegada = new Date(c+'T00:00:00');
+  const hojeNorm = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const diffDias = Math.floor((hojeNorm - chegada)/(24*60*60*1000));
+  const d = Math.ceil(diffDias/7);
+  return d < 1 ? 1 : d;
+}
 function idealPct(gen,sem){const c=CURVAS[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)];}
 
 // ── FETCH FIRESTORE ───────────────────────────────────────────────────────────
@@ -423,8 +429,11 @@ function renderPesoTabela(registros, tipo, containerId){
     const chegada = META[rec.lote]?.chegada;
     let sem;
     if(chegada && rec.dataObj){
-      const diffDias = Math.round((rec.dataObj - new Date(chegada+'T12:00:00'))/(24*60*60*1000));
-      const semCalc = Math.ceil((diffDias+1)/7);
+      const chegadaNorm2 = new Date(chegada+'T00:00:00');
+      const coletaNorm2  = new Date(rec.dataObj.getFullYear(), rec.dataObj.getMonth(), rec.dataObj.getDate());
+      const diffDias2    = Math.floor((coletaNorm2 - chegadaNorm2)/(24*60*60*1000));
+      const semCalc      = Math.ceil(diffDias2/7);
+      sem = semCalc < 1 ? 1 : semCalc;
       sem = semCalc < 1 ? 1 : semCalc;
     } else {
       // Fallback para o valor armazenado se não tiver dados suficientes
@@ -578,8 +587,10 @@ function renderProd(docs){
     Object.entries(lanc.lotes||{}).forEach(([id,v])=>{
       if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola')return; vistos.add(id);
       const m=META[id];
-      const dataLanc=new Date(lanc.id+'T12:00:00');
-      const semNaDataRaw=Math.ceil((dataLanc-new Date(m.chegada+'T12:00:00'))/(7*24*60*60*1000));
+      const dataLanc=new Date(lanc.id+'T00:00:00');
+      const chegadaNorm=new Date(m.chegada+'T00:00:00');
+      const diffSem=Math.floor((dataLanc-chegadaNorm)/(24*60*60*1000));
+      const semNaDataRaw=Math.ceil(diffSem/7);
       const semNaData=semNaDataRaw<1?1:semNaDataRaw;
       const semAtual=semanas(m.chegada);
       // Suporta formato novo (total ou frente+meio+fundo) e legado (frente+fundo sem meio)

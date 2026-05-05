@@ -322,7 +322,13 @@ let S = {
 function la(){ return S.lotes.filter(l=>l.ativo); }
 function lp(){ return S.lotes.filter(l=>l.ativo && semanas(l.chegada)>=26 && l.tipo==='gaiola'); }
 function ls(){ return S.lotes.filter(l=>l.ativo && l.tipo==='soltas'); }
-function semanas(c){ const d=Math.ceil((agora-new Date(c+'T12:00:00'))/(7*24*60*60*1000)); return d<1?1:d; }
+function semanas(c){
+  const chegada = new Date(c+'T00:00:00');
+  const hojeNorm = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  const diffDias = Math.floor((hojeNorm - chegada)/(24*60*60*1000));
+  const d = Math.ceil(diffDias/7);
+  return d < 1 ? 1 : d;
+}
 function fase(s){ if(s<19)return{l:'Recria',c:'br'};if(s<26)return{l:'Pré-postura',c:'bp'};return{l:'Postura ativa',c:'bk'}; }
 function idealPct(gen,sem){ const c=S.curvas[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)]; }
 
@@ -749,9 +755,10 @@ async function subPeso(){
   const p=S.peso;
   const lote=S.lotes.find(l=>l.id===p.loteId);
   // Semana calculada na data da pesagem (não hoje)
-  const dataPesagem=new Date(p.data+'T12:00:00');
-  const diffPeso=Math.round((dataPesagem-new Date(lote.chegada+'T12:00:00'))/(24*60*60*1000));
-  const semPeso=Math.max(1,Math.ceil((diffPeso+1)/7));
+  const dataPesagem=new Date(p.data+'T00:00:00');
+  const chegadaP=new Date(lote.chegada+'T00:00:00');
+  const diffPeso=Math.floor((dataPesagem-chegadaP)/(24*60*60*1000));
+  const semPeso=Math.max(1,Math.ceil(diffPeso/7));
   const vals=p.medicoes.map(m=>parseFloat(m.val)).filter(v=>!isNaN(v)&&v>0);
   const media=vals.reduce((a,b)=>a+b,0)/vals.length;
   const docId=`${p.data}_${p.loteId}_${p.tipo}`;
