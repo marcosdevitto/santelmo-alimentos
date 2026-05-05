@@ -408,39 +408,52 @@ async function corrigirProd(){
   S.override_prod=true; render();
 }
 async function corrigirGaiola(){
-  const doc=S.jaLancado.gaiola;
+  const doc = await verificar('entreposto', S.ed+'_gaiola');
   if(doc){
-    S.gaiola.grande       = doc.grande??'';
-    S.gaiola.extra        = doc.extra??'';
-    S.gaiola.jumbo        = doc.jumbo??'';
-    S.gaiola.sem_class    = doc.sem_classificacao??'';
-    S.gaiola.ovo_liquido  = doc.ovo_liquido??'';
-    S.resp = doc.responsavel||S.resp;
+    S.gaiola.grande      = doc.grande !== undefined ? String(doc.grande) : '';
+    S.gaiola.extra       = doc.extra  !== undefined ? String(doc.extra)  : '';
+    S.gaiola.jumbo       = doc.jumbo  !== undefined ? String(doc.jumbo)  : '';
+    S.gaiola.sem_class   = doc.sem_classificacao !== undefined ? String(doc.sem_classificacao) : '';
+    S.gaiola.ovo_liquido = doc.ovo_liquido !== undefined ? String(doc.ovo_liquido) : '';
+    S.resp = doc.responsavel || S.resp;
   }
-  S.override_gaiola=true; render();
+  S.override_gaiola = true; render();
 }
 async function corrigirSoltas(){
-  const doc=S.jaLancado.soltas;
+  const doc = await verificar('entreposto', S.ed+'_soltas');
   if(doc?.galinhas_soltas){
     Object.entries(doc.galinhas_soltas).forEach(([id,v])=>{
-      S.sp['n_'+id]=v.ninho??'';
-      S.sp['c_'+id]=v.chao??'';
+      S.sp['n_'+id] = v.ninho !== undefined ? String(v.ninho) : '';
+      S.sp['c_'+id] = v.chao  !== undefined ? String(v.chao)  : '';
     });
-    S.resp = doc.responsavel||S.resp;
+    S.resp = doc.responsavel || S.resp;
   }
-  S.override_soltas=true; render();
+  S.override_soltas = true; render();
 }
 async function corrigirMort(){
-  const doc=S.jaLancado.mort;
+  // Busca o documento mais atual direto do Firebase para garantir os dados corretos
+  const doc = await verificar('mortalidade', S.md);
   if(doc){
-    if(doc.lotes) Object.entries(doc.lotes).forEach(([id,v])=>{ S.ml[id]=v??''; });
-    if(doc.temperaturas) Object.entries(doc.temperaturas).forEach(([gid,v])=>{
-      S.mt[gid]={max:v.max??'',min:v.min??''};
-    });
-    S.mo  = doc.observacoes||'';
-    S.resp= doc.responsavel||S.resp;
+    // Mortes por lote
+    if(doc.lotes){
+      Object.entries(doc.lotes).forEach(([id,v])=>{
+        S.ml[id] = (v !== undefined && v !== null) ? String(v) : '';
+      });
+    }
+    // Temperaturas
+    if(doc.temperaturas){
+      Object.entries(doc.temperaturas).forEach(([gid,v])=>{
+        if(S.mt[gid]){
+          S.mt[gid].max = (v.max !== undefined && v.max !== null) ? String(v.max) : '';
+          S.mt[gid].min = (v.min !== undefined && v.min !== null) ? String(v.min) : '';
+        }
+      });
+    }
+    S.mo  = doc.observacoes || '';
+    S.resp = doc.responsavel || S.resp;
   }
-  S.override_mort=true; render();
+  S.override_mort = true;
+  render();
 }
 
 // ── TAB 0: PRODUTIVIDADE ──────────────────────────────────────────────────────
@@ -921,7 +934,12 @@ async function subRacao(){
 async function subMort(){
   if(!S.resp)return alert('Informe o responsável.');
   const lotes={};la().forEach(l=>{lotes[l.id]=parseInt(S.ml[l.id])||0;});
-  const temps={};GALPOES.forEach(g=>{temps[g.id]={max:parseFloat(S.mt[g.id].max)||0,min:parseFloat(S.mt[g.id].min)||0};});
+  // Temperaturas: salva null quando não informada — evita que Firebase crie o campo como int64
+  const temps={};GALPOES.forEach(g=>{
+    const maxVal=S.mt[g.id].max!==''?parseFloat(S.mt[g.id].max):null;
+    const minVal=S.mt[g.id].min!==''?parseFloat(S.mt[g.id].min):null;
+    temps[g.id]={max:maxVal,min:minVal};
+  });
   try{
     await db.collection('mortalidade').doc(S.md).set({
       data:FS.Timestamp.fromDate(new Date(S.md+'T12:00:00')),
