@@ -748,7 +748,10 @@ async function subPeso(){
   if(!S.peso.medicoes.length)return alert('Adicione ao menos uma medição.');
   const p=S.peso;
   const lote=S.lotes.find(l=>l.id===p.loteId);
-  const sem=semanas(lote.chegada);
+  // Semana calculada na data da pesagem (não hoje)
+  const dataPesagem=new Date(p.data+'T12:00:00');
+  const diffPeso=Math.round((dataPesagem-new Date(lote.chegada+'T12:00:00'))/(24*60*60*1000));
+  const semPeso=Math.max(1,Math.ceil((diffPeso+1)/7));
   const vals=p.medicoes.map(m=>parseFloat(m.val)).filter(v=>!isNaN(v)&&v>0);
   const media=vals.reduce((a,b)=>a+b,0)/vals.length;
   const docId=`${p.data}_${p.loteId}_${p.tipo}`;
@@ -759,7 +762,7 @@ async function subPeso(){
       lote:p.loteId,
       lote_nome:lote.nome,
       gen:lote.gen,
-      semanas:sem,
+      semanas:semPeso,
       responsavel:S.resp,
       timestamp_envio:FS.FieldValue.serverTimestamp(),
       medicoes:vals,

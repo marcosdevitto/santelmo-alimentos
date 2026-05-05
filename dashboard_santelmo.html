@@ -365,7 +365,7 @@ function labelsSemana(dados){
     const dia=dt.getDay(); const prev=i>0?(toDate(dados[i-1].data)||dados[i-1].data).getDay?.()??-1:-1;
     return(dia===1&&prev!==1&&i>0?'┊ ':'')+fmtBR(dt);
   });
-}function semanas(c){return Math.ceil((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));}
+}function semanas(c){const d=Math.ceil((hoje-new Date(c+'T12:00:00'))/(7*24*60*60*1000));return d<1?1:d;}
 function idealPct(gen,sem){const c=CURVAS[gen];if(!c)return null;const ks=Object.keys(c).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return c[Math.max(...ks)];}
 
 // ── FETCH FIRESTORE ───────────────────────────────────────────────────────────
@@ -419,7 +419,17 @@ function renderPesoTabela(registros, tipo, containerId){
     .sort((a,b)=>(a.lote_nome||a.lote).localeCompare(b.lote_nome||b.lote,undefined,{numeric:true,sensitivity:'base'}))
     .map(rec=>{
     const diasDesde = Math.floor((hoje - rec.dataObj)/(24*60*60*1000));
-    const sem = rec.semanas; // semana NA COLETA — fixo
+    // Recalcula a semana na data da coleta usando a chegada do lote (mais preciso que o valor armazenado)
+    const chegada = META[rec.lote]?.chegada;
+    let sem;
+    if(chegada && rec.dataObj){
+      const diffDias = Math.round((rec.dataObj - new Date(chegada+'T12:00:00'))/(24*60*60*1000));
+      const semCalc = Math.ceil((diffDias+1)/7);
+      sem = semCalc < 1 ? 1 : semCalc;
+    } else {
+      // Fallback para o valor armazenado se não tiver dados suficientes
+      sem = rec.semanas;
+    }
     const ideal = getIdealPeso(rec.gen, sem, tipo);
     const media = rec.media;
     const isRecria = sem <= 18;
@@ -569,7 +579,8 @@ function renderProd(docs){
       if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola')return; vistos.add(id);
       const m=META[id];
       const dataLanc=new Date(lanc.id+'T12:00:00');
-      const semNaData=Math.ceil((dataLanc-new Date(m.chegada+'T12:00:00'))/(7*24*60*60*1000));
+      const semNaDataRaw=Math.ceil((dataLanc-new Date(m.chegada+'T12:00:00'))/(7*24*60*60*1000));
+      const semNaData=semNaDataRaw<1?1:semNaDataRaw;
       const semAtual=semanas(m.chegada);
       // Suporta formato novo (total ou frente+meio+fundo) e legado (frente+fundo sem meio)
       const total=v.total!==undefined?v.total:(v.frente+(v.meio||0)+v.fundo);
@@ -1072,8 +1083,11 @@ function renderRelatorio(data, dataBR, docGaiola, docSoltas, docMort, docProd, r
   if(pesoDocs.length){
     pesoDocs.sort((a,b)=>(a.lote_nome||a.lote).localeCompare(b.lote_nome||b.lote,undefined,{numeric:true})).forEach(p=>{
       const isAve=p.tipo==='ave';
+      const chegada=META[p.lote]?.chegada;
+      let semExib=p.semanas;
+      if(chegada&&p.dataObj){const diff=Math.round((p.dataObj-new Date(chegada+'T12:00:00'))/(24*60*60*1000));const sc=Math.ceil((diff+1)/7);semExib=sc<1?1:sc;}
       html+=`<div class="rel-row">
-        <span class="rel-lbl">${p.lote_nome||p.lote} · ${isAve?'ave':'ovo'} · sem ${p.semanas} · ${p.total_medicoes} amostras</span>
+        <span class="rel-lbl">${p.lote_nome||p.lote} · ${isAve?'ave':'ovo'} · sem ${semExib} · ${p.total_medicoes} amostras</span>
         <span class="rel-val">${p.media?.toFixed(1)}g</span>
       </div>`;
     });
