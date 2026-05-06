@@ -198,9 +198,27 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 .rel-spinner{display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--muted);font-size:13px;font-family:var(--mono)}
 .rel-empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}
 .rel-header-date{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+/* ── SEÇÃO CURVAS DE PESO ─────────────────────────────────────────────────── */
+.peso-bloco{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.peso-head{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--bg)}
+.peso-title{font-size:14px;font-weight:500}
+.peso-meta{font-size:10px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
+.peso-chart{padding:12px 16px 4px;position:relative;height:220px}
+.peso-leg{display:flex;flex-wrap:wrap;gap:7px;padding:3px 16px 8px;font-size:10px;color:var(--muted)}
+.peso-leg-item{display:flex;align-items:center;gap:3px}
+.peso-leg-line{width:14px;height:2px;border-radius:1px;flex-shrink:0}
+.peso-leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.peso-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.peso-tbl thead tr{background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.peso-tbl th{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:5px 12px;text-align:left;font-family:var(--mono)}
+.peso-tbl td{padding:5px 12px;border-bottom:1px solid var(--border);font-size:11px;vertical-align:middle;color:var(--ink)}
+.peso-tbl tr:last-child td{border-bottom:none}
+.peso-tbl tr:hover td{background:var(--bg)}
+.peso-sec{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:4px 12px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.peso-rec{background:#EFF6FF;color:#1D4ED8;font-size:9px;padding:0 4px;border-radius:4px;margin-left:2px;font-family:var(--mono)}
 
 </style>
-</head>
+
 <body>
 
 <!-- TELA DE LOGIN -->
@@ -288,9 +306,14 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
     <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Gaiola</div><div class="card-sub">Últimos 10 dias · temp. Galpão Produção</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortGaiola"></canvas></div><div class="custom-legend" id="legend-mort-gaiola"></div></div>
     <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Galinhas soltas</div><div class="card-sub">Últimos 10 dias · temp. Galpão Soltas</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortSoltas"></canvas></div><div class="custom-legend" id="legend-mort-soltas"></div></div>
   </div>
-  <div class="grid-2-eq">
-    <div class="card"><div class="card-header"><div><div class="card-title">Peso das aves</div><div class="card-sub">Último registro por lote · ideal fixo na semana da coleta</div></div><span class="card-tag tag-blue">Periódico</span></div><div id="peso-ave-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
-    <div class="card"><div class="card-header"><div><div class="card-title">Peso dos ovos</div><div class="card-sub">Último registro por lote · ideal fixo na semana da coleta</div></div><span class="card-tag tag-amber">Periódico</span></div><div id="peso-ovo-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
+  <div class="grid-1" id="peso-curves-section">
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Curvas de peso — por lote</div><div class="card-sub">Ave e ovo mesclados · curva ideal vs. coletas reais · azul = acima · vermelho = abaixo</div></div>
+        <span class="card-tag" style="background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE">Periódico</span>
+      </div>
+      <div id="peso-curves-body"><div class="loading-card"><div class="spinner"></div></div></div>
+    </div>
   </div>
 </div>
 <div class="footer">Santelmo Alimentos · <span id="footer-ts"></span></div>
@@ -424,21 +447,198 @@ async function fetchProdutividade(){
     .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(3).get();
   return snap.docs.map(d=>({id:d.id,...d.data()}));
 }
-// ── FETCH PESO ────────────────────────────────────────────────────────────────
+// ── RENDER CURVAS DE PESO POR LOTE ───────────────────────────────────────────
+function getIdealPesoLocal(gen, sem, tp){
+  const cp=CURVAS_PESO[gen]; if(!cp) return null;
+  if(tp==='ave'){
+    if(sem<=18){const ks=Object.keys(cp.ave_recria).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return cp.ave_recria[Math.max(...ks)];}
+    const ks=Object.keys(cp.ave_prod).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return{min:cp.ave_prod[Math.max(...ks)]};
+  }
+  const ks=Object.keys(cp.ovo).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return{min:cp.ovo[Math.max(...ks)]};
+}
+
+function getPtStatus(v, gen, sem, tp){
+  const id=getIdealPesoLocal(gen,sem,tp); if(!id||v==null) return'n';
+  const isRecria=sem<=18&&tp==='ave';
+  if(isRecria&&id.max!==undefined){if(v<id.min)return'b';if(v>id.max)return'w';return'ok';}
+  return v<id.min?'b':'ok';
+}
+
+function ptColor(st){return st==='b'?'#dc2626':st==='ok'?'#1d4ed8':'#d97706';}
+function diffColor(st){return st==='b'?'#dc2626':st==='ok'?'#059669':'#d97706';}
+
+function idealTxtLocal(id,tp,sem){
+  if(!id)return'—';
+  if(sem<=18&&tp==='ave'&&id.max!==undefined)return`${id.min}–${id.max}g`;
+  return`≥${id.min}g`;
+}
+
+function diffTxtLocal(v,id,tp,sem){
+  if(!id||v==null)return'—';
+  const r=sem<=18&&tp==='ave';
+  if(r&&id.max!==undefined){if(v<id.min)return`${(v-id.min).toFixed(1)}g`;if(v>id.max)return`+${(v-id.max).toFixed(1)}g↑`;return'✓ faixa';}
+  const d=v-id.min;return d<0?`${d.toFixed(1)}g`:`+${d.toFixed(1)}g`;
+}
+
+function makePesoValPlugin(gen){
+  return{id:'pvp_'+gen,afterDatasetsDraw(chart){
+    const{ctx,data}=chart;
+    data.datasets.forEach((ds,di)=>{
+      if(ds.type!=='scatter')return;
+      const isAve=ds.yAxisID==='yAve';const tp=isAve?'ave':'ovo';
+      chart.getDatasetMeta(di).data.forEach((pt,i)=>{
+        const raw=ds.data[i];if(!raw)return;
+        const v=raw.y;const sem=raw.x;
+        const st=getPtStatus(v,gen,sem,tp);
+        const cor=ptColor(st);
+        const txt=v>=100?Math.round(v)+'g':v.toFixed(1)+'g';
+        ctx.save();
+        ctx.beginPath();
+        if(isAve){ctx.arc(pt.x,pt.y,4,0,2*Math.PI);}
+        else{ctx.moveTo(pt.x,pt.y-5);ctx.lineTo(pt.x-4,pt.y+3);ctx.lineTo(pt.x+4,pt.y+3);ctx.closePath();}
+        ctx.fillStyle=cor;ctx.fill();
+        ctx.strokeStyle='white';ctx.lineWidth=1.2;ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.font='500 9px DM Mono,monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+        const w=ctx.measureText(txt).width;
+        ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(pt.x-w/2-1,pt.y-16,w+2,10);
+        ctx.fillStyle=cor;ctx.fillText(txt,pt.x,pt.y-7);
+        ctx.restore();
+      });
+    });
+  }};
+}
+
+function buildTabelaPeso(arr, tp, gen){
+  if(!arr.length) return`<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--muted);font-style:italic;font-size:11px">sem coletas</td></tr>`;
+  return[...arr].slice(0,10).map(rec=>{
+    const chegada=META[rec.lote]?.chegada;
+    let sem=rec.semanas;
+    if(chegada&&rec.dataObj){
+      const cn=new Date(chegada+'T00:00:00');
+      const dn=new Date(rec.dataObj.getFullYear(),rec.dataObj.getMonth(),rec.dataObj.getDate());
+      const d=Math.floor((dn-cn)/(24*60*60*1000));
+      const sc=Math.ceil(d/7);sem=sc<1?1:sc;
+    }
+    const id=getIdealPesoLocal(gen,sem,tp);
+    const st=getPtStatus(rec.media,gen,sem,tp);
+    const dc=diffColor(st);
+    const isRec=sem<=18&&tp==='ave';
+    return`<tr>
+      <td style="color:var(--muted);font-size:11px">${fmtBR(rec.dataObj)}</td>
+      <td class="mono" style="font-size:10px;color:var(--muted)">${sem}${isRec?`<span class="peso-rec">rec</span>`:''}</td>
+      <td class="mono" style="font-weight:500">${rec.media?.toFixed(1)}g</td>
+      <td class="mono" style="font-size:10px;color:var(--muted)">${idealTxtLocal(id,tp,sem)}</td>
+      <td class="mono" style="font-weight:600;color:${dc}">${diffTxtLocal(rec.media,id,tp,sem)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPesoCurves(pesoDados){
+  const container=document.getElementById('peso-curves-body');
+  if(!pesoDados.length){container.innerHTML='<div class="empty">Nenhuma pesagem registrada.</div>';return;}
+
+  // Agrupa por lote
+  const porLote={};
+  pesoDados.forEach(rec=>{
+    if(!porLote[rec.lote])porLote[rec.lote]={ave:[],ovo:[]};
+    if(rec.tipo==='ave')porLote[rec.lote].ave.push(rec);
+    else porLote[rec.lote].ovo.push(rec);
+  });
+
+  // Ordena histórico do mais recente para o mais antigo
+  Object.values(porLote).forEach(h=>{
+    h.ave.sort((a,b)=>b.dataObj-a.dataObj);
+    h.ovo.sort((a,b)=>b.dataObj-a.dataObj);
+  });
+
+  let html='';
+  LOTES.sort((a,b)=>META[a]?.nome?.localeCompare(META[b]?.nome,undefined,{numeric:true})||0)
+    .filter(id=>porLote[id]&&(porLote[id].ave.length||porLote[id].ovo.length))
+    .forEach(id=>{
+      const meta=META[id];const cor=CORES[id]||'#1B4D35';
+      const gen=meta?.gen||'';
+      const semAtual=meta?.chegada?semanas(meta.chegada):'—';
+      html+=`<div class="peso-bloco">
+        <div class="peso-head">
+          <div style="width:9px;height:9px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+          <div class="peso-title" style="color:${cor}">${meta?.nome||id}</div>
+          <div style="font-size:11px;color:var(--muted);margin-left:3px">· ${gen} · sem ${semAtual}</div>
+          <div class="peso-meta">últimas 10 coletas</div>
+        </div>
+        <div class="peso-chart"><canvas id="pc_${id}"></canvas></div>
+        <div class="peso-leg">
+          <div class="peso-leg-item"><div class="peso-leg-line" style="background:${cor}88"></div>Curva ideal ave</div>
+          <div class="peso-leg-item"><div class="peso-leg-line" style="background:#b4530988"></div>Curva ideal ovo</div>
+          <div class="peso-leg-item"><div class="peso-leg-dot" style="background:#1d4ed8"></div>acima do ideal</div>
+          <div class="peso-leg-item"><div class="peso-leg-dot" style="background:#dc2626"></div>abaixo do ideal</div>
+          <div class="peso-leg-item" style="font-style:italic;margin-left:4px">● ave · ▲ ovo</div>
+        </div>
+        <table class="peso-tbl">
+          <thead><tr><th>Data</th><th>Sem.</th><th>Média</th><th>Ideal</th><th>Diferença</th></tr></thead>
+          <tbody>
+            <tr><td colspan="5" class="peso-sec" style="color:#b45309">🥚 Ovos</td></tr>
+            ${buildTabelaPeso(porLote[id].ovo,'ovo',gen)}
+            <tr><td colspan="5" class="peso-sec" style="color:${cor}">🐔 Aves</td></tr>
+            ${buildTabelaPeso(porLote[id].ave,'ave',gen)}
+          </tbody>
+        </table>
+      </div>`;
+    });
+
+  container.innerHTML=html;
+
+  // Renderiza gráficos
+  LOTES.filter(id=>porLote[id]&&(porLote[id].ave.length||porLote[id].ovo.length)).forEach(id=>{
+    const meta=META[id];const cor=CORES[id]||'#1B4D35';const gen=meta?.gen||'';
+    const cp=CURVAS_PESO[gen]; if(!cp) return;
+    const h=porLote[id];
+
+    // Curvas ideais
+    const aveMin=[],aveMax=[];
+    for(let s=1;s<=18;s++){const ks=Object.keys(cp.ave_recria).map(Number).filter(k=>k<=s);if(ks.length){const v=cp.ave_recria[Math.max(...ks)];aveMin.push({x:s,y:v.min});if(v.max!==undefined)aveMax.push({x:s,y:v.max});}}
+    for(let s=18;s<=100;s+=2){const ks=Object.keys(cp.ave_prod).map(Number).filter(k=>k<=s);if(ks.length)aveMin.push({x:s,y:cp.ave_prod[Math.max(...ks)]});}
+    const ovoMin=[];
+    for(let s=16;s<=100;s++){const ks=Object.keys(cp.ovo).map(Number).filter(k=>k<=s);if(ks.length)ovoMin.push({x:s,y:cp.ovo[Math.max(...ks)]});}
+
+    // Pontos reais (semana recalculada)
+    function toSem(rec){
+      const chegada=meta?.chegada;if(!chegada||!rec.dataObj)return rec.semanas;
+      const cn=new Date(chegada+'T00:00:00');
+      const dn=new Date(rec.dataObj.getFullYear(),rec.dataObj.getMonth(),rec.dataObj.getDate());
+      const d=Math.floor((dn-cn)/(24*60*60*1000));const sc=Math.ceil(d/7);return sc<1?1:sc;
+    }
+
+    const ds=[
+      {label:'Ideal ave',data:aveMin,borderColor:cor+'88',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:0.4,yAxisID:'yAve',order:3},
+      ...(aveMax.length?[{label:'Ideal ave máx',data:aveMax,borderColor:cor+'44',backgroundColor:cor+'0D',borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.4,fill:'-1',yAxisID:'yAve',order:3}]:[]),
+      {label:'Ideal ovo',data:ovoMin,borderColor:'#b4530988',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:0.4,yAxisID:'yOvo',borderDash:[2,2],order:3},
+      ...(h.ave.length?[{label:'Ave',data:[...h.ave].reverse().map(r=>({x:toSem(r),y:r.media})),borderColor:cor+'55',backgroundColor:'transparent',pointRadius:0,showLine:true,borderWidth:1.5,borderDash:[3,3],tension:0,type:'scatter',yAxisID:'yAve',order:1}]:[]),
+      ...(h.ovo.length?[{label:'Ovo',data:[...h.ovo].reverse().map(r=>({x:toSem(r),y:r.media})),borderColor:'#b4530955',backgroundColor:'transparent',pointRadius:0,showLine:true,borderWidth:1.5,borderDash:[3,3],tension:0,type:'scatter',yAxisID:'yOvo',order:2}]:[]),
+    ];
+
+    const existing=Chart.getChart('pc_'+id);if(existing)existing.destroy();
+    new Chart(document.getElementById('pc_'+id),{
+      type:'line',data:{datasets:ds},plugins:[makePesoValPlugin(gen)],
+      options:{responsive:true,maintainAspectRatio:false,parsing:{xAxisKey:'x',yAxisKey:'y'},
+        layout:{padding:{top:18}},
+        plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'},callbacks:{title:c=>`Semana ${c[0].raw.x}`,label:c=>` ${c.dataset.label}: ${c.raw.y?.toFixed(1)}g`}}},
+        scales:{
+          x:{type:'linear',min:1,max:100,grid:{color:'rgba(128,128,128,0.06)'},ticks:{font:{size:9,family:'DM Mono'},callback:v=>v%20===0?'sem '+v:''}},
+          yAve:{position:'left',grid:{color:'rgba(128,128,128,0.06)'},title:{display:true,text:'Ave (g)',font:{size:9},color:cor},ticks:{font:{size:9,family:'DM Mono'},color:cor,callback:v=>v+'g'}},
+          yOvo:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Ovo (g)',font:{size:9},color:'#b45309'},ticks:{font:{size:9,family:'DM Mono'},color:'#b45309',callback:v=>v+'g'},min:30,max:70},
+        }
+      }
+    });
+  });
+}
 async function fetchPeso(){
-  // Busca os últimos registros de peso — um por lote por tipo
+  // Busca todos os registros para mostrar histórico completo
   const snap = await db.collection('peso')
     .orderBy(firebase.firestore.FieldPath.documentId(),'desc')
-    .limit(100).get();
-
-  // Agrupa por lote+tipo, mantém apenas o mais recente
-  const porLoteTipo = {};
-  snap.docs.forEach(d=>{
-    const rec = d.data();
-    const key = `${rec.lote}_${rec.tipo}`;
-    if(!porLoteTipo[key]) porLoteTipo[key] = {id:d.id,...rec, dataObj: toDate(rec.data)||new Date(d.id.split('_')[0]+'T12:00:00')};
-  });
-  return Object.values(porLoteTipo);
+    .limit(300).get();
+  return snap.docs.map(d=>({id:d.id,...d.data(),dataObj:toDate(d.data().data)||new Date(d.id.split('_')[0]+'T12:00:00')}));
 }
 
 // ── RENDER PESO ───────────────────────────────────────────────────────────────
@@ -946,8 +1146,7 @@ async function carregar(){
     renderRacao(racaoDados);
     renderMortChart('chartMortGaiola','legend-mort-gaiola',mortDados,LOTES_GAIOLA,'galpao_producao');
     renderMortChart('chartMortSoltas','legend-mort-soltas',mortDados,LOTES_SOLTAS,'galpao_galinhas_soltas');
-    renderPesoTabela(pesoDados.filter(r=>r.tipo==='ave'), 'ave', 'peso-ave-body');
-    renderPesoTabela(pesoDados.filter(r=>r.tipo==='ovo'), 'ovo', 'peso-ovo-body');
+    renderPesoCurves(pesoDados);
 
     document.getElementById('chip-status').textContent='Firebase ✓';
     document.getElementById('footer-ts').textContent=new Date().toLocaleString('pt-BR');
