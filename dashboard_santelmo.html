@@ -25,7 +25,6 @@ const FIREBASE_CONFIG = {
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
 <style>
@@ -122,7 +121,27 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 .legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 .legend-line{width:18px;height:2px;flex-shrink:0;border-radius:2px}
 .footer{text-align:center;padding:20px;font-size:11px;color:var(--muted);font-family:var(--mono)}
-@media print{.btn-action,.header{display:none}}
+
+/* ── IMPRESSÃO / PDF ──────────────────────────────────────────────────────── */
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body{background:#F4F7F5!important;margin:0;padding:0}
+  .header,.btn-action,.btn-sair,.user-info,.chip,
+  .rel-overlay,#rel-overlay{display:none!important}
+  .dashboard{padding:12px 16px;max-width:100%}
+  .grid-2{grid-template-columns:1.4fr 1fr!important;gap:14px!important;margin-bottom:14px!important}
+  .grid-2-eq{grid-template-columns:1fr 1fr!important;gap:14px!important;margin-bottom:14px!important}
+  .grid-1{margin-bottom:14px!important}
+  .card{break-inside:avoid;box-shadow:none!important;border:1px solid #D1D5DB!important;background:white!important}
+  .chart-lg{height:180px!important}
+  .chart-md{height:160px!important}
+  .chart-sm{height:140px!important}
+  .entre-chart-wrap{height:140px!important}
+  @page{
+    size:A4 landscape;
+    margin:10mm 8mm;
+  }
+}
 
 /* Login */
 .login-bg{position:fixed;inset:0;background:linear-gradient(135deg,#0F2D1E 0%,#1B4D35 60%,#2D6B4A 100%);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
@@ -250,8 +269,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       Atualizar
     </button>
-    <button class="btn-action" id="btn-save" onclick="salvarImagem()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <button class="btn-action" id="btn-save" onclick="exportarPDF()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      Exportar PDF
       Salvar imagem
     </button>
   </div>
@@ -924,18 +944,21 @@ function recarregar(){
   requestAnimationFrame(()=>carregar());
 }
 
-// ── SALVAR IMAGEM ─────────────────────────────────────────────────────────────
-async function salvarImagem(){
-  const btn=document.getElementById('btn-save');btn.classList.add('loading');btn.textContent='Gerando…';
-  document.getElementById('dash-header').style.display='none';
-  try{
-    const c=await html2canvas(document.getElementById('dashboard-content'),{scale:2,backgroundColor:'#F4F7F5',useCORS:true,logging:false});
-    const a=document.createElement('a');a.download=`Relatorio_Santelmo_${HOJE_ISO}.png`;a.href=c.toDataURL('image/png');a.click();
-  }finally{
-    document.getElementById('dash-header').style.display='flex';
-    btn.classList.remove('loading');
-    btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Salvar imagem`;
-  }
+// ── EXPORTAR PDF ──────────────────────────────────────────────────────────────
+function exportarPDF(){
+  // Fecha o painel de relatório se estiver aberto
+  document.getElementById('rel-overlay').style.display='none';
+  document.body.style.overflow='';
+
+  // Aguarda um frame para garantir que o overlay fechou antes de imprimir
+  requestAnimationFrame(()=>{
+    // Define o título do documento para nomear o PDF automaticamente
+    const tituloOriginal=document.title;
+    document.title=`Santelmo_Dashboard_${HOJE_ISO}`;
+    window.print();
+    // Restaura o título após a caixa de diálogo de impressão
+    setTimeout(()=>{document.title=tituloOriginal;},1000);
+  });
 }
 
 // ── RELATÓRIO DIÁRIO ──────────────────────────────────────────────────────────
