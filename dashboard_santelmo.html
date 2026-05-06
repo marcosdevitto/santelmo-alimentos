@@ -366,9 +366,18 @@ const CORES_FIXAS = ['#1B4D35','#2D9A68','#60C48A','#D97706','#F59E0B','#6366F1'
 let META={}, CORES={}, LOTES=[], LOTES_GAIOLA=[], LOTES_SOLTAS=[], CURVAS={};
 
 // ── DATAS ─────────────────────────────────────────────────────────────────────
-const hoje    = new Date();
-const HOJE_ISO= hoje.toISOString().split('T')[0];
-const hLong   = hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+// Datas recalculadas dinamicamente — nunca usar como constante global
+function getDatas(){
+  const now = new Date();
+  const iso = now.toISOString().split('T')[0];
+  const norm = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return {hoje: now, HOJE_ISO: iso, hojeNorm: norm};
+}
+// Mantém compatibilidade com código que usa hoje/HOJE_ISO diretamente
+// mas recalcula a cada uso via getter
+let hoje    = new Date();
+let HOJE_ISO= hoje.toISOString().split('T')[0];
+const hLong = hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
 document.getElementById('header-date').textContent=`Relatório — ${hLong.charAt(0).toUpperCase()+hLong.slice(1)}`;
 document.getElementById('footer-ts').textContent=hoje.toLocaleString('pt-BR');
 
@@ -444,7 +453,11 @@ function renderPesoTabela(registros, tipo, containerId){
   const rows = registros
     .sort((a,b)=>(a.lote_nome||a.lote).localeCompare(b.lote_nome||b.lote,undefined,{numeric:true,sensitivity:'base'}))
     .map(rec=>{
-    const diasDesde = Math.floor((hoje - rec.dataObj)/(24*60*60*1000));
+    // Calcula diasDesde com a data atual no momento do render (não a cached no load)
+    const agora = new Date();
+    const hojeAtual = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const coletaNorm = new Date(rec.dataObj.getFullYear(), rec.dataObj.getMonth(), rec.dataObj.getDate());
+    const diasDesde = Math.floor((hojeAtual - coletaNorm)/(24*60*60*1000));
     // Recalcula a semana na data da coleta usando a chegada do lote (mais preciso que o valor armazenado)
     const chegada = META[rec.lote]?.chegada;
     let sem;
@@ -597,7 +610,10 @@ async function fetchSoltas(){
 function renderProd(docs){
   if(!docs.length){document.getElementById('prod-body').innerHTML='<div class="empty">Nenhum lançamento encontrado.</div>';return;}
   const ultimo=docs[0];
-  const dias=Math.floor((hoje-new Date(ultimo.id+'T12:00:00'))/(24*60*60*1000));
+  const agoraP=new Date();
+  const hojeP=new Date(agoraP.getFullYear(),agoraP.getMonth(),agoraP.getDate());
+  const ultimoD=new Date(ultimo.id+'T00:00:00');
+  const dias=Math.floor((hojeP-ultimoD)/(24*60*60*1000));
   document.getElementById('prod-sub').textContent=`Último: ${new Date(ultimo.id+'T12:00:00').toLocaleDateString('pt-BR')} · ${Object.keys(ultimo.lotes||{}).length} lotes`;
 
   // Coleta todos os dados primeiro, ordena depois
@@ -895,6 +911,12 @@ function renderMortChart(canvasId, legendId, dados, lotesGrupo, galpaoTemp){
 
 // ── LOAD TUDO ─────────────────────────────────────────────────────────────────
 async function carregar(){
+  // Recalcula a data atual a cada carregamento — garante que virada de dia seja detectada
+  hoje     = new Date();
+  HOJE_ISO = hoje.toISOString().split('T')[0];
+  const hLongAtual = hoje.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  document.getElementById('header-date').textContent=`Relatório — ${hLongAtual.charAt(0).toUpperCase()+hLongAtual.slice(1)}`;
+  document.getElementById('footer-ts').textContent=hoje.toLocaleString('pt-BR');
   try{
     document.getElementById('chip-status').textContent='Carregando…';
 
