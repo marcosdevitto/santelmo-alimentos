@@ -410,6 +410,11 @@ function fmtBR(d){
   if(!dt || typeof dt.toLocaleDateString !== 'function') return '—';
   return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
 }
+function fmtBRAnno(d){
+  const dt = toDate(d) || d;
+  if(!dt || typeof dt.toLocaleDateString !== 'function') return '—';
+  return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
 function labelsSemana(dados){
   return dados.map((d,i)=>{
     const dt = toDate(d.data) || d.data;
@@ -526,7 +531,7 @@ function buildTabelaPeso(arr, tp, gen){
     const dc=diffColor(st);
     const isRec=sem<=18&&tp==='ave';
     return`<tr>
-      <td style="color:var(--muted);font-size:11px">${fmtBR(rec.dataObj)}</td>
+      <td style="color:var(--muted);font-size:11px">${fmtBRAnno(rec.dataObj)}</td>
       <td class="mono" style="font-size:10px;color:var(--muted)">${sem}${isRec?`<span class="peso-rec">rec</span>`:''}</td>
       <td class="mono" style="font-weight:500">${rec.media?.toFixed(1)}g</td>
       <td class="mono" style="font-size:10px;color:var(--muted)">${idealTxtLocal(id,tp,sem)}</td>
@@ -573,6 +578,7 @@ function renderPesoCurves(pesoDados){
           <div class="peso-leg-item"><div class="peso-leg-line" style="background:#b4530988"></div>Curva ideal ovo</div>
           <div class="peso-leg-item"><div class="peso-leg-dot" style="background:#1d4ed8"></div>acima do ideal</div>
           <div class="peso-leg-item"><div class="peso-leg-dot" style="background:#dc2626"></div>abaixo do ideal</div>
+          <div class="peso-leg-item"><div class="peso-leg-line" style="background:#16a34a;height:2px;border-top:2px dashed #16a34a;background:none"></div>semana atual</div>
           <div class="peso-leg-item" style="font-style:italic;margin-left:4px">● ave · ▲ ovo</div>
         </div>
         <table class="peso-tbl">
@@ -620,7 +626,36 @@ function renderPesoCurves(pesoDados){
 
     const existing=Chart.getChart('pc_'+id);if(existing)existing.destroy();
     new Chart(document.getElementById('pc_'+id),{
-      type:'line',data:{datasets:ds},plugins:[makePesoValPlugin(gen)],
+      type:'line',data:{datasets:ds},plugins:[makePesoValPlugin(gen),{
+        id:'semAtualLine',
+        afterDraw(chart){
+          const semA=meta?.chegada?semanas(meta.chegada):null;
+          if(!semA)return;
+          const xScale=chart.scales.x;
+          const xPos=xScale.getPixelForValue(semA);
+          const{ctx,chartArea}=chart;
+          ctx.save();
+          ctx.beginPath();
+          ctx.strokeStyle='#16a34a';
+          ctx.lineWidth=2;
+          ctx.setLineDash([6,3]);
+          ctx.moveTo(xPos,chartArea.top);
+          ctx.lineTo(xPos,chartArea.bottom);
+          ctx.stroke();
+          // Label "sem X" com fundo verde
+          const txt=`sem ${semA}`;
+          ctx.font='bold 9px DM Mono,monospace';
+          const tw=ctx.measureText(txt).width;
+          ctx.fillStyle='#16a34a';
+          ctx.fillRect(xPos-tw/2-3,chartArea.top,tw+6,14);
+          ctx.fillStyle='white';
+          ctx.textAlign='center';
+          ctx.textBaseline='top';
+          ctx.fillText(txt,xPos,chartArea.top+2);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }],
       options:{responsive:true,maintainAspectRatio:false,parsing:{xAxisKey:'x',yAxisKey:'y'},
         layout:{padding:{top:18}},
         plugins:{legend:{display:false},tooltip:{bodyFont:{family:'DM Mono'},callbacks:{title:c=>`Semana ${c[0].raw.x}`,label:c=>` ${c.dataset.label}: ${c.raw.y?.toFixed(1)}g`}}},
