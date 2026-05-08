@@ -262,10 +262,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
           Buscar
         </button>
         <button class="rel-btn-copiar" id="rel-btn-copiar" style="display:none" onclick="copiarResumo()">Copiar resumo</button>
-        <button class="rel-btn-copiar" id="rel-btn-whats" style="display:none;background:rgba(37,211,102,.1);color:#16a34a;border-color:rgba(37,211,102,.4)" onclick="abrirWhatsAppResumo()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:3px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.17 1.595 5.945L.057 23.75a.5.5 0 0 0 .609.61l5.926-1.516A11.955 11.955 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.77-.524-5.37-1.489l-.38-.228-3.938 1.007 1.033-3.823-.249-.394A9.955 9.955 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-          WhatsApp
-        </button>
       </div>
       <div id="rel-content">
         <div class="rel-empty-state">Escolha uma data e clique em Buscar para ver os dados do dia.</div>
@@ -286,10 +282,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
     <button class="btn-action" onclick="abrirRelatorio()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
       Relatório
-    </button>
-    <button class="btn-action" id="btn-whats" onclick="enviarWhatsApp()" style="background:rgba(37,211,102,.2);border-color:rgba(37,211,102,.5)">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.17 1.595 5.945L.057 23.75a.5.5 0 0 0 .609.61l5.926-1.516A11.955 11.955 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.933 0-3.77-.524-5.37-1.489l-.38-.228-3.938 1.007 1.033-3.823-.249-.394A9.955 9.955 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-      WhatsApp
     </button>
     <button class="btn-action" onclick="recarregar()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -1403,42 +1395,9 @@ function renderRelatorio(data, dataBR, docGaiola, docSoltas, docMort, docProd, r
 
   document.getElementById('rel-content').innerHTML=html;
   document.getElementById('rel-btn-copiar').style.display='block';
-  document.getElementById('rel-btn-whats').style.display='block';
 
-  // Salva o texto para copiar e WhatsApp
+  // Salva o texto para copiar
   window._relTexto=textoResumo;
-}
-
-function gerarTextoResumoHoje(){
-  // Gera resumo rápido do dia atual para o botão do header
-  const dataHoje = new Date().toLocaleDateString('pt-BR');
-  let txt = `📊 Relatório Santelmo — ${dataHoje}\n`;
-  txt += `Dashboard: https://marcosdevitto.github.io/santelmo-alimentos/dashboard_santelmo.html`;
-  return txt;
-}
-
-function abrirWhatsApp(texto){
-  const encoded = encodeURIComponent(texto);
-  // Abre WhatsApp Web com mensagem pré-preenchida
-  window.open(`https://wa.me/?text=${encoded}`, '_blank');
-}
-
-function abrirWhatsAppResumo(){
-  if(!window._relTexto) return;
-  abrirWhatsApp(window._relTexto);
-}
-
-function enviarWhatsApp(){
-  // Botão do header — abre o relatório do dia e depois WhatsApp
-  abrirRelatorio();
-  // Pequeno delay para o painel abrir antes de alertar o usuário
-  setTimeout(()=>{
-    const toast = document.createElement('div');
-    toast.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#166534;color:white;padding:10px 18px;border-radius:8px;font-size:13px;z-index:300;box-shadow:0 4px 12px rgba(0,0,0,.2)';
-    toast.textContent='Busque a data desejada e clique em "WhatsApp" para enviar';
-    document.body.appendChild(toast);
-    setTimeout(()=>toast.remove(), 4000);
-  }, 300);
 }
 
 function copiarResumo(){
