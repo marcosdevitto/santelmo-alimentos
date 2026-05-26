@@ -306,7 +306,7 @@ let S = {
   gaiola: {grande:'',extra:'',jumbo:'',sem_class:'',ovo_liquido:''},
   sp: {},
   // ração
-  racao: {lote:'', qtd:'', data: HOJE, batidas: 1},
+  racao: {data: ONTEM, batidas:{}, qtd:{}, jaLancado:null, override:false},
   // mortalidade
   override_mort: false, md: ONTEM,
   ml: {}, mo: '',
@@ -386,6 +386,7 @@ async function ST(i){
   buildTabs();
   // Verifica travas ao abrir aba
   if(i===1){ S.jaLancado.gaiola=await verificar('entreposto',S.ed+'_gaiola'); S.jaLancado.soltas=await verificar('entreposto',S.ed+'_soltas'); }
+  if(i===2){ S.racao.jaLancado=await verificar('racao',S.racao.data); }
   if(i===3){ S.jaLancado.mort=await verificar('mortalidade',S.md); }
   if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
   render();
@@ -550,43 +551,108 @@ function renderSoltas(){
 
 // ── TAB 2: RAÇÃO ──────────────────────────────────────────────────────────────
 function t2(){
-  const batidas=S.racao.batidas||1;
-  const qtd=parseInt(S.racao.qtd)||0;
-  const total=qtd*batidas;
-  return`
+  const r=S.racao;
+  const trava=r.jaLancado&&!r.override;
+
+  // Total geral
+  const totalKg=la().reduce((s,l)=>{
+    const b=r.batidas[l.id]||0;const q=parseInt(r.qtd[l.id])||0;return s+b*q;
+  },0);
+  const totalBat=la().reduce((s,l)=>s+(r.batidas[l.id]||0),0);
+  const lotesAtivos=la().filter(l=>(r.batidas[l.id]||0)>0);
+
+  let html=`
     <div class="row-2">
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
       <div class="form-group"><label>Data referente aos dados</label>
-        <input type="date" value="${S.racao.data}" max="${HOJE}" oninput="S.racao.data=this.value">
+        <input type="date" value="${r.data}" max="${HOJE}"
+          oninput="S.racao.data=this.value;S.racao.jaLancado=null;S.racao.override=false;verificar('racao',this.value).then(d=>{S.racao.jaLancado=d;render();})">
       </div>
-    </div>
-    <div class="form-group"><label>Lote de destino</label>
-      <select onchange="S.racao.lote=this.value"><option value="">Selecione o lote</option>
-        ${la().map(l=>`<option value="${l.id}"${S.racao.lote===l.id?' selected':''}>${l.nome} — ${l.gen}${l.tipo==='soltas'?' (soltas)':''}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label>Quantidade por batida</label>
-      <div style="display:flex;gap:10px">
-        <div class="ropt${S.racao.qtd==='500'?' sel':''}" onclick="S.racao.qtd='500';render()">500 kg</div>
-        <div class="ropt${S.racao.qtd==='1000'?' sel':''}" onclick="S.racao.qtd='1000';render()">1000 kg</div>
+    </div>`;
+
+  if(trava){
+    const doc=r.jaLancado;
+    const lotesDoc=doc.lotes||{};
+    const totKg=Object.values(lotesDoc).reduce((s,v)=>s+(v.batidas||0)*(v.qtd_por_batida||0),0);
+    const totBat=Object.values(lotesDoc).reduce((s,v)=>s+(v.batidas||0),0);
+    html+=`<div style="border:1px solid var(--verde-border);border-radius:10px;padding:16px;text-align:center;background:var(--verde-light);margin-bottom:14px">
+      <div style="font-size:24px;margin-bottom:6px">✅</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:2px">Ração já lançada para esta data</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Responsável: ${doc.responsavel||'—'}</div>
+      <div style="background:var(--card);border:1px solid var(--verde-border);border-radius:8px;padding:10px 12px;margin-bottom:12px;text-align:left">
+        ${Object.entries(lotesDoc).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([id,v])=>{
+          const meta=S.lotes.find(l=>l.id===id);
+          const nome=meta?.nome||id;
+          return`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--verde-border);font-size:12px">
+            <span>${nome}</span>
+            <span style="color:var(--muted)">${v.batidas} bat. × ${v.qtd_por_batida}kg</span>
+            <span style="font-weight:600;color:var(--verde)">${((v.batidas||0)*(v.qtd_por_batida||0)).toLocaleString('pt-BR')} kg</span>
+          </div>`;
+        }).join('')}
+        <div style="display:flex;justify-content:space-between;padding:7px 0 2px;font-size:12px;font-weight:600;color:var(--verde)">
+          <span>Total</span><span>${totBat} batidas</span><span>${totKg.toLocaleString('pt-BR')} kg</span>
+        </div>
       </div>
-    </div>
-    <div class="form-group"><label>Número de batidas</label>
-      <div style="display:flex;align-items:center;gap:12px">
-        <button onclick="if(S.racao.batidas>1){S.racao.batidas--;render()}" style="width:36px;height:36px;border-radius:8px;border:1.5px solid var(--verde-border);background:var(--verde-light);color:var(--verde);font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
-        <span id="bat-num" style="font-family:var(--mono);font-size:28px;font-weight:500;color:var(--verde);min-width:32px;text-align:center">${batidas}</span>
-        <button onclick="S.racao.batidas=(S.racao.batidas||1)+1;render()" style="width:36px;height:36px;border-radius:8px;border:1.5px solid var(--verde-border);background:var(--verde-light);color:var(--verde);font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">+</button>
-        <span style="font-size:13px;color:var(--muted)">batida${batidas>1?'s':''}</span>
+      <button style="padding:7px 18px;border:1.5px solid var(--amber);color:var(--amber);background:var(--amber-light);border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
+        onclick="corrigirRacao()">⚠ Corrigir lançamento</button>
+    </div>`;
+  } else {
+    if(r.override){
+      html+=`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente — os dados anteriores serão substituídos ao confirmar.</div>`;
+    }
+    html+=`<div class="stitle">Batidas por lote</div>
+    <div style="border:1px solid var(--verde-border);border-radius:8px;overflow:hidden;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 110px 120px;gap:8px;background:var(--verde-light);padding:6px 12px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--verde-border)">
+        <span>Lote</span><span>Qtd/batida</span><span style="text-align:center">Batidas</span>
       </div>
-    </div>
-    ${qtd&&batidas?`
-    <div style="background:var(--verde-light);border:1px solid var(--verde-border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:13px;color:var(--verde)">${batidas} batida${batidas>1?'s':''} × ${qtd} kg</span>
-      <span style="font-size:20px;font-weight:600;color:var(--verde);font-family:var(--mono)">${total.toLocaleString('pt-BR')} kg total</span>
-    </div>`:''}
-    <div class="ibox" style="font-size:11px">Cada batida é salva como um registro separado no Firebase. Registrar ${batidas} batida${batidas>1?'s':''} criará ${batidas} registro${batidas>1?'s':''}.</div>
-    <button class="btn-sub" onclick="subRacao()">Registrar ${batidas} batida${batidas>1?'s':''} — ${total?total.toLocaleString('pt-BR')+' kg total':'selecione a quantidade'}</button>
-    <div class="fnote">🔥 addDoc("racao") × ${batidas} — sem trava, múltiplas batidas esperadas.</div>`;
+      ${la().map(l=>{
+        const b=r.batidas[l.id]||0;
+        const q=r.qtd[l.id]||'1000'; // default 1000kg
+        const tot=b*(parseInt(q)||0);
+        return`<div style="display:grid;grid-template-columns:1fr 110px 120px;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--verde-border);background:${b>0?'var(--verde-light)':'var(--card)'}">
+          <div>
+            <div style="font-size:13px;font-weight:500">${l.nome}${l.tipo==='soltas'?` <span style="font-size:10px;background:var(--amber-light);color:var(--amber);padding:1px 5px;border-radius:4px">soltas</span>`:''}</div>
+            <div style="font-size:11px;color:var(--muted)">${l.gen}</div>
+            ${tot>0?`<div style="font-size:11px;font-weight:600;color:var(--verde);margin-top:1px">${tot.toLocaleString('pt-BR')} kg</div>`:''}
+          </div>
+          <select style="padding:5px 7px;border:1.5px solid var(--verde-border);border-radius:6px;font-size:12px;font-family:inherit;${b===0?'opacity:.35;pointer-events:none':''}"
+            onchange="S.racao.qtd['${l.id}']=this.value;render()">
+            <option value="500" ${q==='500'?'selected':''}>500 kg</option>
+            <option value="1000" ${q==='1000'?'selected':''}>1000 kg</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:7px;justify-content:center">
+            <button onclick="S.racao.batidas['${l.id}']=Math.max(0,(S.racao.batidas['${l.id}']||0)-1);render()"
+              style="width:28px;height:28px;border-radius:6px;border:1.5px solid var(--border);background:var(--bg);font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink)">−</button>
+            <span style="font-family:var(--mono);font-size:16px;font-weight:500;color:${b>0?'var(--verde)':'var(--muted)'};min-width:18px;text-align:center">${b}</span>
+            <button onclick="S.racao.batidas['${l.id}']=(S.racao.batidas['${l.id}']||0)+1;render()"
+              style="width:28px;height:28px;border-radius:6px;border:1.5px solid var(--verde-border);background:var(--verde-light);font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--verde)">+</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+    if(totalKg>0){
+      html+=`<div style="background:var(--verde-light);border:1px solid var(--verde-border);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <span style="font-size:13px;color:var(--verde)">${lotesAtivos.length} lote${lotesAtivos.length>1?'s':''} · ${totalBat} batida${totalBat>1?'s':''}</span>
+        <span style="font-size:18px;font-weight:600;color:var(--verde);font-family:var(--mono)">${totalKg.toLocaleString('pt-BR')} kg</span>
+      </div>`;
+    }
+    html+=`<button class="btn-sub" onclick="subRacao()">Registrar ração — ${totalKg>0?totalKg.toLocaleString('pt-BR')+' kg total':'adicione batidas nos lotes'}</button>`;
+  }
+  return html;
+}
+
+async function corrigirRacao(){
+  const doc=S.racao.jaLancado;
+  if(doc?.lotes){
+    S.racao.batidas={};S.racao.qtd={};
+    Object.entries(doc.lotes).forEach(([id,v])=>{
+      S.racao.batidas[id]=v.batidas||0;
+      S.racao.qtd[id]=String(v.qtd_por_batida||1000);
+    });
+    S.resp=doc.responsavel||S.resp;
+  }
+  S.racao.override=true;render();
 }
 
 // ── TAB 3: MORTALIDADE ────────────────────────────────────────────────────────
@@ -920,24 +986,33 @@ async function subSoltas(){
 }
 
 async function subRacao(){
-  if(!S.racao.lote||!S.racao.qtd)return alert('Selecione lote e quantidade.');
-  const batidas=S.racao.batidas||1;
-  const qtdKg=parseInt(S.racao.qtd);
+  if(!S.resp) return alert('Informe o responsável.');
+  const r=S.racao;
+  const lotesAtivos=la().filter(l=>(r.batidas[l.id]||0)>0);
+  if(!lotesAtivos.length) return alert('Adicione ao menos uma batida em algum lote.');
+
+  // Monta objeto com todos os lotes que tiveram batidas
+  const lotesDoc={};
+  lotesAtivos.forEach(l=>{
+    const bat=r.batidas[l.id]||0;
+    const qtd=parseInt(r.qtd[l.id])||1000;
+    lotesDoc[l.id]={batidas:bat,qtd_por_batida:qtd,total_kg:bat*qtd};
+  });
+  const totalKg=Object.values(lotesDoc).reduce((s,v)=>s+v.total_kg,0);
+  const totalBat=Object.values(lotesDoc).reduce((s,v)=>s+v.batidas,0);
+
   try{
-    const promises=[];
-    for(let i=0;i<batidas;i++){
-      promises.push(db.collection('racao').add({
-        data:FS.Timestamp.fromDate(new Date(S.racao.data+'T12:00:00')),
-        lote:S.racao.lote,
-        quantidade_kg:qtdKg,
-        responsavel:S.resp,
-        timestamp_envio:FS.FieldValue.serverTimestamp(),
-      }));
-    }
-    await Promise.all(promises);
-    const total=qtdKg*batidas;
-    toast(`✓ ${batidas} batida${batidas>1?'s':''} registrada${batidas>1?'s':''} — ${total.toLocaleString('pt-BR')} kg total!`);
-    S.racao={lote:'',qtd:'',data:HOJE,batidas:1};render();
+    await db.collection('racao').doc(r.data).set({
+      data:FS.Timestamp.fromDate(new Date(r.data+'T12:00:00')),
+      responsavel:S.resp,
+      timestamp_envio:FS.FieldValue.serverTimestamp(),
+      lotes:lotesDoc,
+      total_kg:totalKg,
+      total_batidas:totalBat,
+    });
+    toast(`✓ Ração registrada! ${totalBat} batidas · ${totalKg.toLocaleString('pt-BR')} kg`);
+    S.racao={data:ONTEM,batidas:{},qtd:{},jaLancado:null,override:false};
+    render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 

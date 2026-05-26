@@ -806,11 +806,17 @@ async function fetchRacao(){
   for(let i=9;i>=0;i--){const d=addDays(hoje,-(i+1));const k=d.toISOString().split('T')[0];dias[k]={data:d,lotes:{}};dArr.push(k);}
   snap.docs.forEach(d=>{
     const rec=d.data();
-    const dt=toDate(rec.data);
-    if(!dt)return;
-    const k=dt.toISOString().split('T')[0];
-    if(!dias[k])return;
-    dias[k].lotes[rec.lote]=(dias[k].lotes[rec.lote]||0)+rec.quantidade_kg;
+    const dt=toDate(rec.data);if(!dt)return;
+    const k=dt.toISOString().split('T')[0];if(!dias[k])return;
+    // Novo formato: documento único por data com campo lotes{}
+    if(rec.lotes){
+      Object.entries(rec.lotes).forEach(([id,v])=>{
+        dias[k].lotes[id]=(dias[k].lotes[id]||0)+(v.total_kg||0);
+      });
+    } else if(rec.lote){
+      // Formato legado: um doc por batida
+      dias[k].lotes[rec.lote]=(dias[k].lotes[rec.lote]||0)+(rec.quantidade_kg||0);
+    }
   });
   return dArr.map(k=>dias[k]);
 }
@@ -1251,14 +1257,23 @@ async function buscarRelatorio(){
       db.collection('produtividade').doc(data).get(),
     ]);
 
-    // Ração — busca por timestamp do dia
-    const dInicio=new Date(data+'T00:00:00');
-    const dFim   =new Date(data+'T23:59:59');
-    const racaoSnap=await db.collection('racao')
-      .where('data','>=',firebase.firestore.Timestamp.fromDate(dInicio))
-      .where('data','<=',firebase.firestore.Timestamp.fromDate(dFim))
-      .get();
-    const racaoDocs=racaoSnap.docs.map(d=>({id:d.id,...d.data()}));
+    // Ração — busca doc por data (novo formato) + docs individuais (legado)
+    const racaoDocNovo=await db.collection('racao').doc(data).get();
+    let racaoDocs=[];
+    if(racaoDocNovo.exists&&racaoDocNovo.data().lotes){
+      // Novo formato — expande em array para compatibilidade
+      const d=racaoDocNovo.data();
+      Object.entries(d.lotes||{}).forEach(([id,v])=>{
+        racaoDocs.push({lote:id,quantidade_kg:v.total_kg||0,batidas:v.batidas||0,qtd_por_batida:v.qtd_por_batida||0,responsavel:d.responsavel});
+      });
+    } else {
+      // Legado — busca por timestamp
+      const dInicio=new Date(data+'T00:00:00');const dFim=new Date(data+'T23:59:59');
+      const racaoSnap=await db.collection('racao')
+        .where('data','>=',firebase.firestore.Timestamp.fromDate(dInicio))
+        .where('data','<=',firebase.firestore.Timestamp.fromDate(dFim)).get();
+      racaoDocs=racaoSnap.docs.map(d=>({id:d.id,...d.data()}));
+    }
 
     // Peso — busca docs com prefixo da data
     const pesoAveDoc=await db.collection('peso').where(firebase.firestore.FieldPath.documentId(),'>=',data+'_').where(firebase.firestore.FieldPath.documentId(),'<=',data+'_z').get();
@@ -1343,16 +1358,20 @@ function renderRelatorio(data, dataBR, docGaiola, docSoltas, docMort, docProd, r
   html+=`<div class="rel-sec">
     <div class="rel-sec-head"><div class="rel-sec-title"><div class="rel-sec-dot" style="background:#D97706"></div>Ração</div>${tagR}</div>`;
   if(racaoDocs.length){
-    // Agrupa por lote
     const porLote={};
-    racaoDocs.forEach(r=>{if(!porLote[r.lote])porLote[r.lote]={kg:0,bat:0};porLote[r.lote].kg+=r.quantidade_kg||0;porLote[r.lote].bat++;});
+    racaoDocs.forEach(r=>{
+      if(!porLote[r.lote])porLote[r.lote]={kg:0,bat:0};
+      porLote[r.lote].kg+=r.quantidade_kg||0;
+      porLote[r.lote].bat+=r.batidas||1;
+    });
     const totalKg=Object.values(porLote).reduce((s,v)=>s+v.kg,0);
+    const totalBat=Object.values(porLote).reduce((s,v)=>s+v.bat,0);
     Object.keys(porLote).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).forEach(id=>{
       const v=porLote[id];const nome=META[id]?.nome||id;
       html+=`<div class="rel-row"><span class="rel-lbl">${nome} · ${v.bat} batida${v.bat>1?'s':''}</span><span class="rel-val">${v.kg.toLocaleString('pt-BR')} kg</span></div>`;
     });
-    html+=`<div class="rel-note">Total: ${totalKg.toLocaleString('pt-BR')} kg · ${racaoDocs.length} batida${racaoDocs.length>1?'s':''}</div>`;
-    textoResumo+=`🌾 Ração: ${totalKg.toLocaleString('pt-BR')} kg (${racaoDocs.length} batidas)\n`;
+    html+=`<div class="rel-note">Total: ${totalKg.toLocaleString('pt-BR')} kg · ${totalBat} batida${totalBat>1?'s':''}</div>`;
+    textoResumo+=`🌾 Ração: ${totalKg.toLocaleString('pt-BR')} kg (${totalBat} batidas)\n`;
   }else{html+=`<div class="rel-no-data">Nenhuma batida registrada</div>`;}
   html+=`</div>`;
 
