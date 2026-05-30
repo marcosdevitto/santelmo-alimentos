@@ -1166,11 +1166,10 @@ async function carregar(){
     CURVAS = curvas;
     lotes.sort((a,b)=>a.nome.localeCompare(b.nome,undefined,{numeric:true,sensitivity:'base'}));
     lotes.forEach((l,i)=>{ META[l.id]=l; CORES[l.id]=CORES_FIXAS[i%CORES_FIXAS.length]; });
-    // Apenas lotes ativos aparecem no dashboard
-    const lotesAtivos = lotes.filter(l=>l.ativo!==false);
-    LOTES        = lotesAtivos.map(l=>l.id);
-    LOTES_GAIOLA = lotesAtivos.filter(l=>l.tipo==='gaiola').map(l=>l.id);
-    LOTES_SOLTAS = lotesAtivos.filter(l=>l.tipo==='soltas').map(l=>l.id);
+    // LOTES completo — usado em ração e mortalidade (histórico, inclui inativos)
+    LOTES        = lotes.map(l=>l.id);
+    LOTES_GAIOLA = lotes.filter(l=>l.tipo==='gaiola').map(l=>l.id);
+    LOTES_SOLTAS = lotes.filter(l=>l.tipo==='soltas').map(l=>l.id);
 
     // 2. Todos os dados em paralelo
     const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados] = await Promise.all([
