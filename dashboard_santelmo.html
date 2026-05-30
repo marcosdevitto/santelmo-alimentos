@@ -862,7 +862,7 @@ function renderProd(docs){
   const vistos=new Set();
   docs.forEach(lanc=>{
     Object.entries(lanc.lotes||{}).forEach(([id,v])=>{
-      if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola')return; vistos.add(id);
+      if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola'||META[id].ativo===false)return; vistos.add(id);
       const m=META[id];
       const dataLanc=new Date(lanc.id+'T00:00:00');
       const chegadaNorm=new Date(m.chegada+'T00:00:00');

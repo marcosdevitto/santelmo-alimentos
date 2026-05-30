@@ -319,8 +319,8 @@ let S = {
   cg: '', showAddGen: false, ng: '',
 };
 
-function la(){ return S.lotes.filter(l=>l.ativo); }
-function lp(){ return S.lotes.filter(l=>l.ativo && semanas(l.chegada)>=26 && l.tipo==='gaiola'); }
+function la(){ return S.lotes.filter(l=>l.ativo!==false); }
+function lp(){ return S.lotes.filter(l=>l.ativo!==false && semanas(l.chegada)>=26 && l.tipo==='gaiola'); }
 function ls(){ return S.lotes.filter(l=>l.ativo && l.tipo==='soltas'); }
 function semanas(c){
   const chegada = new Date(c+'T00:00:00');
