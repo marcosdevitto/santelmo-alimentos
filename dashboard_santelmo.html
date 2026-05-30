@@ -560,7 +560,7 @@ function renderPesoCurves(pesoDados){
 
   let html='';
   LOTES.sort((a,b)=>META[a]?.nome?.localeCompare(META[b]?.nome,undefined,{numeric:true})||0)
-    .filter(id=>porLote[id]&&(porLote[id].ave.length||porLote[id].ovo.length))
+    .filter(id=>META[id]?.ativo!==false&&porLote[id]&&(porLote[id].ave.length||porLote[id].ovo.length))
     .forEach(id=>{
       const meta=META[id];const cor=CORES[id]||'#1B4D35';
       const gen=meta?.gen||'';
@@ -596,7 +596,7 @@ function renderPesoCurves(pesoDados){
   container.innerHTML=html;
 
   // Renderiza gráficos
-  LOTES.filter(id=>porLote[id]&&(porLote[id].ave.length||porLote[id].ovo.length)).forEach(id=>{
+  LOTES.filter(id=>META[id]?.ativo!==false&&porLote[id]&&(porLote[id].ave.length||porLote[id].ovo.length)).forEach(id=>{
     const meta=META[id];const cor=CORES[id]||'#1B4D35';const gen=meta?.gen||'';
     const cp=CURVAS_PESO[gen]; if(!cp) return;
     const h=porLote[id];
@@ -1166,9 +1166,11 @@ async function carregar(){
     CURVAS = curvas;
     lotes.sort((a,b)=>a.nome.localeCompare(b.nome,undefined,{numeric:true,sensitivity:'base'}));
     lotes.forEach((l,i)=>{ META[l.id]=l; CORES[l.id]=CORES_FIXAS[i%CORES_FIXAS.length]; });
-    LOTES        = lotes.map(l=>l.id);
-    LOTES_GAIOLA = lotes.filter(l=>l.tipo==='gaiola').map(l=>l.id);
-    LOTES_SOLTAS = lotes.filter(l=>l.tipo==='soltas').map(l=>l.id);
+    // Apenas lotes ativos aparecem no dashboard
+    const lotesAtivos = lotes.filter(l=>l.ativo!==false);
+    LOTES        = lotesAtivos.map(l=>l.id);
+    LOTES_GAIOLA = lotesAtivos.filter(l=>l.tipo==='gaiola').map(l=>l.id);
+    LOTES_SOLTAS = lotesAtivos.filter(l=>l.tipo==='soltas').map(l=>l.id);
 
     // 2. Todos os dados em paralelo
     const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados] = await Promise.all([
