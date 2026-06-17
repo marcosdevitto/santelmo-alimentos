@@ -315,6 +315,22 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
       <div id="peso-curves-body"><div class="loading-card"><div class="spinner"></div></div></div>
     </div>
   </div>
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Estoque de ingredientes</div><div class="card-sub">Saldo atual · mínimo definido · projeção de consumo</div></div>
+        <span class="card-tag tag-amber" id="estoque-alert-tag" style="display:none">alertas</span>
+      </div>
+      <div id="estoque-body"><div class="loading-card"><div class="spinner"></div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Troca de fórmula</div><div class="card-sub">Lotes próximos da transição de fase</div></div>
+        <span class="card-tag tag-red" id="troca-alert-tag" style="display:none">alertas</span>
+      </div>
+      <div id="troca-formula-body"><div class="loading-card"><div class="spinner"></div></div></div>
+    </div>
+  </div>
 </div>
 <div class="footer">Santelmo Alimentos · <span id="footer-ts"></span></div>
 </div><!-- /main-app -->
@@ -668,6 +684,146 @@ function renderPesoCurves(pesoDados){
     });
   });
 }
+}
+// ── FASES DE RAÇÃO ────────────────────────────────────────────────────────────
+const FASES_RACAO=[
+  {id:'cresc1',nome:'Crescimento 1',semIni:9, semFim:13},
+  {id:'cresc2',nome:'Crescimento 2',semIni:14,semFim:15},
+  {id:'prepos',nome:'Pré-postura',  semIni:16,semFim:18},
+  {id:'pico',  nome:'Pico',         semIni:19,semFim:35},
+  {id:'pos1',  nome:'Postura 1',    semIni:36,semFim:55},
+  {id:'pos2',  nome:'Postura 2',    semIni:56,semFim:70},
+  {id:'pos3',  nome:'Postura 3',    semIni:71,semFim:999},
+];
+function getFaseAtual(sem){return FASES_RACAO.find(f=>sem>=f.semIni&&sem<=f.semFim)||null;}
+function getProximaFase(faseId){const idx=FASES_RACAO.findIndex(f=>f.id===faseId);return idx>=0&&idx<FASES_RACAO.length-1?FASES_RACAO[idx+1]:null;}
+
+// ── FETCH ESTOQUE ─────────────────────────────────────────────────────────────
+async function fetchEstoque(){
+  const [itensSnap,formulasSnap]=await Promise.all([
+    db.collection('estoque_itens').get(),
+    db.collection('formulas_racao').get(),
+  ]);
+  return{
+    itens:itensSnap.docs.map(d=>({id:d.id,...d.data()})),
+    formulas:Object.fromEntries(formulasSnap.docs.map(d=>[d.id,d.data()])),
+  };
+}
+
+// ── RENDER ESTOQUE ────────────────────────────────────────────────────────────
+function renderEstoque(itens,formulas){
+  const el=document.getElementById('estoque-body');
+  const tag=document.getElementById('estoque-alert-tag');
+  if(!el)return;
+  if(!itens.length){el.innerHTML='<div class="empty">Nenhum item de estoque cadastrado.</div>';return;}
+
+  // Calcula consumo diário estimado por ingrediente
+  const consumoDiario={};
+  LOTES.filter(id=>META[id]?.ativo!==false).forEach(id=>{
+    const meta=META[id];const sem=semanas(meta.chegada);
+    const faseId=meta.formula_fase||getFaseAtual(sem)?.id;
+    if(!faseId||!formulas[faseId])return;
+    const fm=formulas[faseId];
+    const varNome=meta.formula_variacao;
+    let ings=fm.padrao?.ings||[];
+    if(varNome&&varNome!=='padrao'){
+      const v=fm.variacoes?.find(v=>v.nome===varNome&&v.lotes?.includes(id));
+      if(v)ings=v.ings||[];
+    }
+    const avesIni=meta.aves_iniciais||0;
+    const consumoGAveDia=110; // estimativa padrão — refinável com curvas de consumo
+    const batidasDia=(avesIni*consumoGAveDia/1000)/1000;
+    ings.filter(i=>i.ctrl).forEach(i=>{
+      consumoDiario[i.nome]=(consumoDiario[i.nome]||0)+(i.kg||0)*batidasDia;
+    });
+  });
+
+  let alertas=0;
+  const html=itens.sort((a,b)=>a.nome.localeCompare(b.nome)).map(item=>{
+    const qtd=item.qtd_atual||0;
+    const min=item.estoque_minimo||0;
+    const cDia=Math.round((consumoDiario[item.nome]||0)*10)/10;
+    const dias=cDia>0?Math.floor(qtd/cDia):null;
+    const status=qtd<=0?'zero':min>0&&qtd<min?'baixo':dias!==null&&dias<7?'critico':'ok';
+    if(status!=='ok')alertas++;
+    const cor=status==='ok'?'#1B4D35':'#DC2626';
+    const bg=status==='ok'?'var(--verde-light)':'#FEE2E2';
+    const bord=status==='ok'?'var(--verde-border)':'#FCA5A5';
+    const pct=min>0?Math.min(100,Math.round(qtd/min*100)):100;
+    const barCor=status==='ok'?'#1B4D35':status==='baixo'?'#D97706':'#DC2626';
+    return`<div style="border:1px solid ${bord};border-radius:9px;padding:10px 13px;background:${bg};margin-bottom:8px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:${min>0?'6px':'2px'}">
+        <div>
+          <div style="font-size:13px;font-weight:500">${item.nome}</div>
+          ${min>0?`<div style="font-size:11px;color:var(--muted)">mín: ${min.toLocaleString('pt-BR')} kg</div>`:''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:17px;font-weight:500;font-family:var(--mono);color:${cor}">${qtd.toLocaleString('pt-BR')} kg</div>
+          <div style="font-size:11px;font-weight:600;color:${dias===null?'var(--muted)':dias<7?'#DC2626':dias<15?'#D97706':'#1B4D35'}">${dias!==null?`~${dias} dias`:`${cDia>0?cDia.toFixed(1)+' kg/dia':'sem consumo est.'}`}</div>
+        </div>
+      </div>
+      ${min>0?`<div style="height:5px;border-radius:3px;background:rgba(0,0,0,.1);overflow:hidden"><div style="height:100%;width:${pct}%;background:${barCor};border-radius:3px"></div></div>`:''}
+    </div>`;
+  }).join('');
+
+  el.innerHTML=html;
+  if(alertas>0){tag.style.display='block';tag.textContent=`${alertas} alerta${alertas>1?'s':''}`;tag.className='card-tag tag-red';}
+  else{tag.style.display='none';}
+}
+
+// ── RENDER TROCA DE FÓRMULA ───────────────────────────────────────────────────
+function renderTrocaFormula(){
+  const el=document.getElementById('troca-formula-body');
+  const tag=document.getElementById('troca-alert-tag');
+  if(!el)return;
+  const lotesAtivos=LOTES.filter(id=>META[id]?.ativo!==false);
+  if(!lotesAtivos.length){el.innerHTML='<div class="empty">Nenhum lote ativo.</div>';return;}
+
+  const alertas=[],emDia=[];
+  lotesAtivos.forEach(id=>{
+    const meta=META[id];const sem=semanas(meta.chegada);
+    const faseAtualId=meta.formula_fase||getFaseAtual(sem)?.id;
+    const faseTeorId=getFaseAtual(sem)?.id;
+    const faseAtualObj=FASES_RACAO.find(f=>f.id===faseAtualId);
+    const faseTeorObj=FASES_RACAO.find(f=>f.id===faseTeorId);
+    const proxFase=faseAtualObj?getProximaFase(faseAtualObj.id):null;
+    const semsParaTroca=proxFase?proxFase.semIni-sem:null;
+    const atrasada=faseAtualId&&faseTeorId&&faseAtualId!==faseTeorId;
+    const item={id,nome:meta.nome,gen:meta.gen,sem,faseAtualObj,faseTeorObj,proxFase,semsParaTroca,atrasada};
+    if(atrasada||(semsParaTroca!==null&&semsParaTroca<=3&&semsParaTroca>=0))alertas.push(item);
+    else emDia.push(item);
+  });
+
+  let html=alertas.map(item=>{
+    const cor=item.atrasada?'#DC2626':'#D97706';
+    const bg=item.atrasada?'#FEE2E2':'#FFFBEB';
+    const bord=item.atrasada?'#FCA5A5':'#FDE68A';
+    return`<div style="border:1px solid ${bord};border-radius:9px;padding:10px 13px;background:${bg};margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+        <div><div style="font-size:13px;font-weight:500">${item.nome}</div><div style="font-size:11px;color:var(--muted)">${item.gen} · sem ${item.sem}</div></div>
+        <span style="font-size:11px;font-weight:600;color:${cor}">${item.atrasada?'⚠ atrasada':'troca em '+item.semsParaTroca+' sem'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:12px">
+        <span style="padding:3px 9px;border-radius:6px;background:white;color:#065F46;border:1px solid #A7F3D0">${item.faseAtualObj?.nome||'—'}</span>
+        <span style="color:var(--muted)">→</span>
+        <span style="padding:3px 9px;border-radius:6px;background:white;color:#6D28D9;border:1px solid #DDD6FE">${item.proxFase?.nome||item.faseTeorObj?.nome||'—'}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(emDia.length){
+    html+=`<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 0 6px;border-top:1px solid var(--border);margin-top:4px">Em dia</div>`;
+    html+=emDia.map(item=>`<div style="border:1px solid var(--verde-border);border-radius:8px;padding:7px 12px;background:var(--verde-light);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+      <div><span style="font-size:12px;font-weight:500">${item.nome}</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${item.faseAtualObj?.nome||'sem fase'} · sem ${item.sem}</span></div>
+      <span style="font-size:11px;color:var(--muted)">${item.proxFase&&item.semsParaTroca!==null?`→ ${item.proxFase.nome} em ${item.semsParaTroca} sem`:'última fase'}</span>
+    </div>`).join('');
+  }
+
+  el.innerHTML=html;
+  if(alertas.length){tag.style.display='block';tag.textContent=`${alertas} alerta${alertas.length>1?'s':''}`;tag.className='card-tag tag-red';}
+  else tag.style.display='none';
+}
+
 async function fetchPeso(){
   // Busca todos os registros para mostrar histórico completo
   const snap = await db.collection('peso')
@@ -1172,13 +1328,14 @@ async function carregar(){
     LOTES_SOLTAS = lotes.filter(l=>l.tipo==='soltas').map(l=>l.id);
 
     // 2. Todos os dados em paralelo
-    const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados] = await Promise.all([
+    const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados, estoqueDados] = await Promise.all([
       fetchProdutividade(),
       fetchEntreposto(10),
       fetchRacao(),
       fetchMortalidade(),
       fetchSoltas(),
       fetchPeso(),
+      fetchEstoque(),
     ]);
 
     // 3. Renderiza cada seção
@@ -1189,6 +1346,8 @@ async function carregar(){
     renderMortChart('chartMortGaiola','legend-mort-gaiola',mortDados,LOTES_GAIOLA,'galpao_producao');
     renderMortChart('chartMortSoltas','legend-mort-soltas',mortDados,LOTES_SOLTAS,'galpao_galinhas_soltas');
     renderPesoCurves(pesoDados);
+    renderEstoque(estoqueDados.itens, estoqueDados.formulas);
+    renderTrocaFormula();
 
     document.getElementById('chip-status').textContent='Firebase ✓';
     document.getElementById('footer-ts').textContent=new Date().toLocaleString('pt-BR');
