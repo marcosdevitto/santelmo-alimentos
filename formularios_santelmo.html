@@ -1547,8 +1547,12 @@ function tEstoque(){
               <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':'#DC2626'}">${isEntrada?'+':'−'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
               <td style="padding:6px 10px;font-size:11px;color:var(--muted)">${m.ref||'—'}</td>
               <td style="padding:6px 10px;text-align:center">
-                ${isEntrada?`<button onclick="S.estoque.editandoMov=${idx};render()" title="Editar"
-                  style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px">✏</button>`:''}
+                ${isEntrada?`<div style="display:flex;gap:4px;justify-content:center">
+                  <button onclick="S.estoque.editandoMov=${idx};render()" title="Editar"
+                    style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 7px">✏</button>
+                  <button onclick="excluirMov(${idx})" title="Excluir"
+                    style="background:none;border:1px solid #FCA5A5;border-radius:5px;color:#DC2626;cursor:pointer;font-size:12px;padding:2px 7px">🗑</button>
+                </div>`:''}
               </td>
             </tr>`;
           }).join('')}
@@ -1665,6 +1669,27 @@ async function registrarEntradaEstoque(){
     S.estoque.movimentos.unshift({ingrediente:ne.ingrediente,tipo:'entrada',qtd,data:FS.Timestamp.fromDate(new Date(ne.data+'T12:00:00')),ref:'compra'});
     toast(`✓ Entrada registrada: ${qtd.toLocaleString('pt-BR')} kg de ${ne.ingrediente}`);
     S.estoque.novaEntrada={ingrediente:'',qtd:'',data:HOJE};
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+async function excluirMov(idx){
+  const m=S.estoque.movimentos[idx];
+  if(!m?.id)return;
+  if(!confirm(`Excluir entrada de ${(m.qtd||0).toLocaleString('pt-BR')} kg de "${m.ingrediente}"?\n\nO saldo será reduzido em ${(m.qtd||0).toLocaleString('pt-BR')} kg.`))return;
+  try{
+    await db.collection('estoque_movimentos').doc(m.id).delete();
+    // Ajusta saldo: desconta a qtd que estava entrada
+    const itemRef=db.collection('estoque_itens').doc(m.ingrediente.toLowerCase().replace(/\s+/g,'_'));
+    const snap=await itemRef.get();
+    if(snap.exists){
+      const atual=snap.data().qtd_atual||0;
+      const novoSaldo=Math.max(0,atual-(m.qtd||0));
+      await itemRef.update({qtd_atual:novoSaldo,ultima_atualizacao:FS.FieldValue.serverTimestamp()});
+      const itemIdx=S.estoque.itens.findIndex(i=>i.nome===m.ingrediente);
+      if(itemIdx>=0)S.estoque.itens[itemIdx].qtd_atual=novoSaldo;
+    }
+    S.estoque.movimentos.splice(idx,1);
+    toast(`✓ Lançamento excluído — saldo de "${m.ingrediente}" ajustado`);
     render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
