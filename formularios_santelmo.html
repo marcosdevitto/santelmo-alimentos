@@ -314,7 +314,7 @@ let S = {
   // peso
   peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
   // config lotes
-  showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:''},
+  showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:''},
   // curvas
   cg: '', showAddGen: false, ng: '',
 };
@@ -853,7 +853,34 @@ function t4(){
   const gens=Object.keys(S.curvas);
   return`
     <div class="stitle">Lotes cadastrados</div>
-    ${S.lotes.map(l=>{const s=semanas(l.chegada);const f=fase(s);const p=Math.min(100,Math.round(s/60*100));return`<div class="lote-card" style="${!l.ativo?'opacity:.5':''}"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px">${l.nome}${l.tipo==='soltas'?`<span class="badge bs">Galinhas soltas</span>`:''}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${l.gen}</div></div><div style="text-align:right"><div class="wbig">${s}<span style="font-size:13px;font-weight:400;color:var(--muted)"> sem</span></div><span class="badge ${l.ativo?f.c:'bi'}">${l.ativo?f.l:'Inativo'}</span></div></div><div class="pbar"><div class="pfill" style="width:${p}%;background:${l.ativo?'var(--verde)':'#9CA3AF'}"></div></div><div style="font-size:12px;color:var(--muted);margin-top:4px">Chegada: ${new Date(l.chegada+'T12:00:00').toLocaleDateString('pt-BR')}</div><div style="display:flex;gap:8px;margin-top:10px">${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}</div></div>`;}).join('')}
+    ${S.lotes.map(l=>{
+      const s=semanas(l.chegada);const f=fase(s);const p=Math.min(100,Math.round(s/60*100));
+      const avesIni=l.aves_iniciais||null;
+      return`<div class="lote-card" style="${!l.ativo?'opacity:.5':''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px">${l.nome}${l.tipo==='soltas'?`<span class="badge bs">Galinhas soltas</span>`:''}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${l.gen}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="wbig">${s}<span style="font-size:13px;font-weight:400;color:var(--muted)"> sem</span></div>
+            <span class="badge ${l.ativo?f.c:'bi'}">${l.ativo?f.l:'Inativo'}</span>
+          </div>
+        </div>
+        <div class="pbar"><div class="pfill" style="width:${p}%;background:${l.ativo?'var(--verde)':'#9CA3AF'}"></div></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Chegada: ${new Date(l.chegada+'T12:00:00').toLocaleDateString('pt-BR')}</div>
+        ${avesIni
+          ?`<div style="font-size:12px;color:var(--muted);margin-top:3px">🐔 Aves na chegada: <strong style="color:var(--ink)">${avesIni.toLocaleString('pt-BR')}</strong></div>`
+          :`<div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:7px;display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:#92400E">⚠ Aves iniciais não informadas</span>
+              <input id="aves_${l.id}" type="number" min="0" placeholder="Qtd de aves"
+                style="padding:5px 8px;border:1.5px solid #FDE68A;border-radius:6px;font-size:12px;width:130px;background:white;flex:1">
+              <button onclick="salvarAves('${l.id}')"
+                style="padding:5px 12px;border:1px solid var(--verde-border);border-radius:6px;font-size:12px;background:var(--verde-light);color:var(--verde);cursor:pointer;white-space:nowrap">Salvar</button>
+            </div>`}
+        <div style="display:flex;gap:8px;margin-top:10px">${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}</div>
+      </div>`;
+    }).join('')}
     <button class="btn-add" onclick="S.showAdd=!S.showAdd;render()">+ Adicionar novo lote</button>
     ${S.showAdd?`<div class="aform">
       <div style="font-size:13px;font-weight:600;color:var(--verde);margin-bottom:12px">Novo lote</div>
@@ -871,6 +898,10 @@ function t4(){
       </div>
       <div class="form-group" style="margin-bottom:12px"><label>Data de chegada</label>
         <input type="date" value="${S.novoLote.chegada}" max="${HOJE}" oninput="S.novoLote.chegada=this.value;render()">
+      </div>
+      <div class="form-group" style="margin-bottom:12px"><label>Aves na chegada (cabeças)</label>
+        <input type="number" min="0" placeholder="ex: 18000" value="${S.novoLote.aves_iniciais}" oninput="S.novoLote.aves_iniciais=this.value">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Usado para calcular consumo estimado e projeção de estoque</div>
       </div>
       ${S.novoLote.chegada?`<div style="background:white;border:1px solid var(--verde-border);border-radius:6px;padding:8px 12px;font-size:12px;color:#065F46;margin-bottom:12px"><strong>${semanas(S.novoLote.chegada)} semanas</strong> · <span class="badge ${fase(semanas(S.novoLote.chegada)).c}">${fase(semanas(S.novoLote.chegada)).l}</span></div>`:''}
       <button class="btn-sub" style="margin-top:4px" onclick="adicionarLote()">Salvar lote no Firebase</button>
@@ -1041,14 +1072,16 @@ async function subMort(){
 
 // ── GESTÃO DE LOTES ───────────────────────────────────────────────────────────
 async function adicionarLote(){
-  const{nome,gen,tipo,chegada}=S.novoLote;
+  const{nome,gen,tipo,chegada,aves_iniciais}=S.novoLote;
   if(!nome||!gen||!chegada)return alert('Preencha todos os campos.');
+  if(!aves_iniciais||parseInt(aves_iniciais)<=0)return alert('Informe a quantidade de aves na chegada.');
   const id=nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+  const aves=parseInt(aves_iniciais);
   try{
-    await db.collection('lotes').doc(id).set({nome,gen,tipo,chegada,ativo:true});
-    S.lotes.push({id,nome,gen,tipo,chegada,ativo:true});
+    await db.collection('lotes').doc(id).set({nome,gen,tipo,chegada,ativo:true,aves_iniciais:aves});
+    S.lotes.push({id,nome,gen,tipo,chegada,ativo:true,aves_iniciais:aves});
     S.lotes.sort((a,b)=>a.nome.localeCompare(b.nome));
-    S.novoLote={nome:'',gen:'',tipo:'gaiola',chegada:''};S.showAdd=false;
+    S.novoLote={nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:''};S.showAdd=false;
     toast('✓ Lote adicionado!');render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
@@ -1060,6 +1093,18 @@ async function encerrarLote(id){
 async function reativarLote(id){
   try{ await db.collection('lotes').doc(id).update({ativo:true}); S.lotes.find(l=>l.id===id).ativo=true; toast('Lote reativado.');render(); }
   catch(e){toast('Erro: '+e.message,false);}
+}
+
+async function salvarAves(id){
+  const inp=document.getElementById('aves_'+id);
+  const v=parseInt(inp?.value||0);
+  if(!v||v<=0)return alert('Informe uma quantidade válida de aves.');
+  try{
+    await db.collection('lotes').doc(id).update({aves_iniciais:v});
+    S.lotes.find(l=>l.id===id).aves_iniciais=v;
+    toast(`✓ Aves iniciais salvas: ${v.toLocaleString('pt-BR')} aves`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
 }
 
 // ── GESTÃO DE CURVAS ──────────────────────────────────────────────────────────
