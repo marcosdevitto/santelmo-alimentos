@@ -717,9 +717,14 @@ function renderEstoque(itens,formulas){
   if(!itens.length){el.innerHTML='<div class="empty">Nenhum item de estoque cadastrado.</div>';return;}
 
   // Calcula consumo diário estimado por ingrediente
-  const consumoDiario={};
+  const consumoDiario={}; // chave normalizada (lowercase trim)
+  const nomeOriginal={}; // mapeia normalizado → nome original do estoque
+  itens.forEach(i=>{ nomeOriginal[i.nome.toLowerCase().trim()]=i.nome; });
+
   LOTES.filter(id=>META[id]?.ativo!==false).forEach(id=>{
-    const meta=META[id];const sem=semanas(meta.chegada);
+    const meta=META[id];
+    if(!meta?.chegada)return;
+    const sem=semanas(meta.chegada);
     const faseId=meta.formula_fase||getFaseAtual(sem)?.id;
     if(!faseId||!formulas[faseId])return;
     const fm=formulas[faseId];
@@ -730,10 +735,12 @@ function renderEstoque(itens,formulas){
       if(v)ings=v.ings||[];
     }
     const avesIni=meta.aves_iniciais||0;
-    const consumoGAveDia=110; // estimativa padrão — refinável com curvas de consumo
+    if(avesIni<=0)return; // sem aves cadastradas, não calcula consumo
+    const consumoGAveDia=110;
     const batidasDia=(avesIni*consumoGAveDia/1000)/1000;
     ings.filter(i=>i.ctrl).forEach(i=>{
-      consumoDiario[i.nome]=(consumoDiario[i.nome]||0)+(i.kg||0)*batidasDia;
+      const key=i.nome.toLowerCase().trim();
+      consumoDiario[key]=(consumoDiario[key]||0)+(i.kg||0)*batidasDia;
     });
   });
 
@@ -742,7 +749,7 @@ function renderEstoque(itens,formulas){
     const qtd=item.qtd_atual||0;
     const min=item.estoque_minimo||0;
     const kgSaco=item.kg_por_saco||null;
-    const cDia=Math.round((consumoDiario[item.nome]||0)*10)/10;
+    const cDia=Math.round((consumoDiario[item.nome.toLowerCase().trim()]||0)*10)/10;
     const dias=cDia>0?Math.floor(qtd/cDia):null;
     const status=qtd<=0?'zero':min>0&&qtd<min?'baixo':dias!==null&&dias<7?'critico':'ok';
     if(status!=='ok')alertas++;
@@ -773,7 +780,8 @@ function renderEstoque(itens,formulas){
         </div>
         <div style="text-align:right">
           ${fmtQ(qtd)}
-          <div style="font-size:11px;font-weight:600;color:${dias===null?'var(--muted)':dias<7?'#DC2626':dias<15?'#D97706':'#1B4D35'}">${dias!==null?`~${dias} dias`:`${cDia>0?cDia.toFixed(1)+' kg/dia':'sem consumo est.'}`}</div>
+          <div style="font-size:11px;font-weight:600;color:${dias===null?'var(--muted)':dias<7?'#DC2626':dias<15?'#D97706':'#1B4D35'}">${dias!==null?`~${dias} dias`:cDia>0?cDia.toFixed(1)+' kg/dia':'sem consumo est.'}</div>
+          ${cDia===0&&item.qtd_atual>0?`<div style="font-size:10px;color:#D97706;margin-top:2px" title="Verifique: fórmula cadastrada, ingrediente com ✅ e aves iniciais preenchidas">⚠ verificar configuração</div>`:''}
         </div>
       </div>
       ${min>0?`<div style="height:5px;border-radius:3px;background:rgba(0,0,0,.1);overflow:hidden"><div style="height:100%;width:${pct}%;background:${barCor};border-radius:3px"></div></div>`:''}
