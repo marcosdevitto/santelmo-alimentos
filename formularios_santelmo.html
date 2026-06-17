@@ -414,6 +414,7 @@ async function ST(i){
   if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
   if(i===7){ await carregarFormulas(); }
   if(i===8){ await carregarEstoque(); }
+  if(i===5){ await carregarFormulas(); } // Config. Lotes precisa das fórmulas para mostrar variações
   render();
 }
 
@@ -912,6 +913,33 @@ function t4(){
           const semsParaTroca=proxFase?proxFase.semIni-sem:null;
           const atrasada=faseObj&&faseTeor&&faseObj.id!==faseTeor.id;
           if(!faseObj)return'';
+
+          // Opções de fórmula disponíveis para a fase atual
+          const fm=S.formulas[faseAtual];
+          const variacoes=fm?.variacoes||[];
+          const varAtual=l.formula_variacao||'padrao';
+          const opcoes=[
+            {val:'padrao',label:'Padrão'},
+            ...variacoes.map(v=>({val:v.nome,label:v.nome}))
+          ];
+
+          const selectorHtml=opcoes.length>1?`
+            <div style="margin-top:8px;padding:8px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
+              <div style="font-size:11px;font-weight:600;color:var(--verde);margin-bottom:6px">Fórmula em uso</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                ${opcoes.map(o=>`<button onclick="selecionarFormula('${l.id}','${faseAtual}','${o.val}')"
+                  style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${varAtual===o.val?'var(--verde)':'var(--border)'};background:${varAtual===o.val?'var(--verde)':'var(--card)'};color:${varAtual===o.val?'white':'var(--muted)'}">
+                  ${varAtual===o.val?'✓ ':''}${o.label}
+                </button>`).join('')}
+              </div>
+              <div style="font-size:11px;color:var(--muted)">Fase: <strong>${faseObj.nome}</strong>${proxFase?` · próxima: ${proxFase.nome} (sem ${proxFase.semIni})`:''}</div>
+            </div>`:`
+            <div style="font-size:12px;color:var(--muted);margin-top:6px;padding:7px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
+              🌾 <strong style="color:var(--verde)">${faseObj.nome}</strong> — fórmula padrão
+              ${variacoes.length===0?`<span style="color:var(--muted)"> · sem variações cadastradas</span>`:''}
+              ${proxFase?`<span style="color:var(--muted)"> · próxima: ${proxFase.nome} (sem ${proxFase.semIni})</span>`:''}
+            </div>`;
+
           let alertHtml='';
           if(atrasada){
             alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
@@ -924,10 +952,7 @@ function t4(){
               <button onclick="abrirConfirmacaoTroca('${l.id}')" style="padding:5px 12px;background:#D97706;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar troca</button>
             </div>`;
           }
-          return`<div style="font-size:12px;color:var(--muted);margin-top:3px">
-            🌾 Fórmula atual: <strong style="color:var(--verde)">${faseObj.nome}</strong>
-            ${proxFase?`<span style="color:var(--muted)"> · próxima: ${proxFase.nome} (sem ${proxFase.semIni})</span>`:''}
-          </div>${alertHtml}`;
+          return`${selectorHtml}${alertHtml}`;
         })()}
         <div style="display:flex;gap:8px;margin-top:10px">${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}</div>
       </div>`;
@@ -1196,6 +1221,21 @@ async function encerrarLote(id){
   try{ await db.collection('lotes').doc(id).update({ativo:false}); S.lotes.find(l=>l.id===id).ativo=false; toast('Lote encerrado.');render(); }
   catch(e){toast('Erro: '+e.message,false);}
 }
+async function selecionarFormula(loteId, faseId, variacao){
+  try{
+    await db.collection('lotes').doc(loteId).update({
+      formula_fase: faseId,
+      formula_variacao: variacao,
+    });
+    const lote=S.lotes.find(l=>l.id===loteId);
+    if(lote){lote.formula_fase=faseId;lote.formula_variacao=variacao;}
+    const fase=FASES_RACAO.find(f=>f.id===faseId);
+    const label=variacao==='padrao'?'Padrão':variacao;
+    toast(`✓ ${lote?.nome||loteId} — usando ${fase?.nome||faseId} · ${label}`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
 async function reativarLote(id){
   try{ await db.collection('lotes').doc(id).update({ativo:true}); S.lotes.find(l=>l.id===id).ativo=true; toast('Lote reativado.');render(); }
   catch(e){toast('Erro: '+e.message,false);}
