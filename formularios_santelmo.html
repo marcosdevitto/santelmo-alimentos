@@ -291,7 +291,26 @@ const GALPOES = [
   {id:'galpao_galinhas_soltas',label:'Galinhas Soltas'},
   {id:'galpao_recria',        label:'Galpão Recria'},
 ];
-const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas'];
+const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas','Fórmulas'];
+
+// Fases de ração — definição global
+const FASES_RACAO = [
+  {id:'cresc1', nome:'Crescimento 1', semIni:9,  semFim:13, diasDesc:'Dia 61–90'},
+  {id:'cresc2', nome:'Crescimento 2', semIni:14, semFim:15, diasDesc:'Dia 91–105'},
+  {id:'prepos', nome:'Pré-postura',   semIni:16, semFim:18, diasDesc:'Dia 106–126'},
+  {id:'pico',   nome:'Pico',          semIni:19, semFim:35, diasDesc:'Sem 19–35'},
+  {id:'pos1',   nome:'Postura 1',     semIni:36, semFim:55, diasDesc:'Sem 36–55'},
+  {id:'pos2',   nome:'Postura 2',     semIni:56, semFim:70, diasDesc:'Sem 56–70'},
+  {id:'pos3',   nome:'Postura 3',     semIni:71, semFim:999,diasDesc:'Sem 71+'},
+];
+
+function getFaseAtual(sem){
+  return FASES_RACAO.find(f=>sem>=f.semIni&&sem<=f.semFim)||null;
+}
+function getProximaFase(faseId){
+  const idx=FASES_RACAO.findIndex(f=>f.id===faseId);
+  return idx>=0&&idx<FASES_RACAO.length-1?FASES_RACAO[idx+1]:null;
+}
 
 // ── ESTADO ────────────────────────────────────────────────────────────────────
 let S = {
@@ -313,6 +332,9 @@ let S = {
   mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
   // peso
   peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
+  // fórmulas
+  formulas: {}, // {faseId: {padrao:{ings:[]}, variacoes:[{nome,lotes:[],ings:[]}]}}
+  formulaEdit: {faseId:null, varIdx:'padrao', ings:[]},
   // config lotes
   showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:''},
   // curvas
@@ -389,6 +411,7 @@ async function ST(i){
   if(i===2){ S.racao.jaLancado=await verificar('racao',S.racao.data); }
   if(i===3){ S.jaLancado.mort=await verificar('mortalidade',S.md); }
   if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
+  if(i===7){ await carregarFormulas(); }
   render();
 }
 
@@ -397,7 +420,7 @@ function render(){
   if(!S.ready)return;
   const activeId   = document.activeElement?.id;
   const selStart   = document.activeElement?.selectionStart;
-  const map=[t0,t1,t2,t3,tPeso,t4,t5];
+  const map=[t0,t1,t2,t3,tPeso,t4,t5,tFormulas];
   document.getElementById('content').innerHTML=map[S.tab]?.()??'';
   if(activeId){const el=document.getElementById(activeId);if(el){el.focus();try{if(selStart!==undefined&&el.setSelectionRange)el.setSelectionRange(selStart,selStart);}catch(e){}}}
 }
@@ -878,6 +901,32 @@ function t4(){
               <button onclick="salvarAves('${l.id}')"
                 style="padding:5px 12px;border:1px solid var(--verde-border);border-radius:6px;font-size:12px;background:var(--verde-light);color:var(--verde);cursor:pointer;white-space:nowrap">Salvar</button>
             </div>`}
+        ${(()=>{
+          const sem=semanas(l.chegada);
+          const faseAtual=l.formula_fase||getFaseAtual(sem)?.id||null;
+          const faseObj=FASES_RACAO.find(f=>f.id===faseAtual);
+          const faseTeor=getFaseAtual(sem);
+          const proxFase=faseObj?getProximaFase(faseObj.id):null;
+          const semsParaTroca=proxFase?proxFase.semIni-sem:null;
+          const atrasada=faseObj&&faseTeor&&faseObj.id!==faseTeor.id;
+          if(!faseObj)return'';
+          let alertHtml='';
+          if(atrasada){
+            alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <span style="font-size:11px;color:#991B1B">🔴 Fase teórica já é <strong>${faseTeor?.nome}</strong> — troca não confirmada</span>
+              <button onclick="abrirConfirmacaoTroca('${l.id}')" style="padding:5px 12px;background:#DC2626;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar →</button>
+            </div>`;
+          } else if(proxFase&&semsParaTroca<=3&&semsParaTroca>=0){
+            alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <span style="font-size:11px;color:#92400E">⚠ Troca para <strong>${proxFase.nome}</strong> em ~${semsParaTroca} sem</span>
+              <button onclick="abrirConfirmacaoTroca('${l.id}')" style="padding:5px 12px;background:#D97706;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar troca</button>
+            </div>`;
+          }
+          return`<div style="font-size:12px;color:var(--muted);margin-top:3px">
+            🌾 Fórmula atual: <strong style="color:var(--verde)">${faseObj.nome}</strong>
+            ${proxFase?`<span style="color:var(--muted)"> · próxima: ${proxFase.nome} (sem ${proxFase.semIni})</span>`:''}
+          </div>${alertHtml}`;
+        })()}
         <div style="display:flex;gap:8px;margin-top:10px">${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}</div>
       </div>`;
     }).join('')}
@@ -1107,7 +1156,214 @@ async function salvarAves(id){
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
-// ── GESTÃO DE CURVAS ──────────────────────────────────────────────────────────
+// ── TAB FÓRMULAS ──────────────────────────────────────────────────────────────
+async function carregarFormulas(){
+  const snap=await db.collection('formulas_racao').get();
+  S.formulas={};
+  snap.docs.forEach(d=>{ S.formulas[d.id]=d.data(); });
+}
+
+function tFormulas(){
+  const fe=S.formulaEdit;
+  let html=`<div class="ibox" style="font-size:11px">Cada fase tem uma fórmula padrão. Crie variações nomeadas para casos específicos e vincule aos lotes desejados. A troca de fórmula por lote é confirmada manualmente na aba <strong>Config. Lotes</strong>.</div>`;
+
+  FASES_RACAO.forEach(f=>{
+    const fm=S.formulas[f.id];
+    const aberta=fe.faseId===f.id;
+    const nVar=fm?.variacoes?.length||0;
+    const temPadrao=!!fm?.padrao?.ings?.length;
+
+    html+=`<div style="border:1px solid ${aberta?'var(--verde)':'var(--border)'};border-radius:10px;overflow:hidden;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:${aberta?'var(--verde-light)':'var(--bg)'};cursor:pointer" onclick="toggleFaseFormula('${f.id}')">
+        <div>
+          <div style="font-size:13px;font-weight:500">${f.nome}</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:1px">${f.diasDesc}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${temPadrao?`<span style="font-size:10px;padding:2px 8px;border-radius:8px;font-weight:500;background:#ECFDF5;color:#065F46;border:0.5px solid #A7F3D0">✓ fórmula</span>`:`<span style="font-size:10px;padding:2px 8px;border-radius:8px;font-weight:500;background:var(--amber-light);color:var(--amber);border:0.5px solid #FDE68A">sem fórmula</span>`}
+          ${nVar>0?`<span style="font-size:10px;padding:2px 8px;border-radius:8px;font-weight:500;background:#F5F3FF;color:#6D28D9;border:0.5px solid #DDD6FE">${nVar} variação${nVar>1?'ões':''}</span>`:''}
+          <span style="color:var(--muted)">${aberta?'▲':'▼'}</span>
+        </div>
+      </div>`;
+
+    if(aberta){
+      // Tabs padrão + variações
+      html+=`<div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--verde-border);background:var(--verde-light)">
+        <button onclick="setVarFormula('padrao')" style="padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${fe.varIdx==='padrao'?'var(--verde)':'var(--border)'};background:${fe.varIdx==='padrao'?'var(--verde)':'var(--card)'};color:${fe.varIdx==='padrao'?'white':'var(--muted)'}">Padrão</button>
+        ${(fm?.variacoes||[]).map((v,i)=>`<button onclick="setVarFormula(${i})" style="padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${fe.varIdx===i?'#6D28D9':'var(--border)'};background:${fe.varIdx===i?'#6D28D9':'#F5F3FF'};color:${fe.varIdx===i?'white':'#6D28D9'}">${v.nome}${v.lotes?.length?` (${v.lotes.length})`:''}</button>`).join('')}
+        <button onclick="novaVariacaoFormula()" style="padding:4px 10px;border-radius:20px;font-size:12px;cursor:pointer;border:1px dashed var(--border);background:transparent;color:var(--muted)">+ Variação</button>
+      </div>`;
+
+      // Vinculo lotes (só para variações)
+      if(fe.varIdx!=='padrao'&&fm?.variacoes?.[fe.varIdx]){
+        const vObj=fm.variacoes[fe.varIdx];
+        html+=`<div style="padding:8px 14px;background:#F5F3FF;border-bottom:1px solid #DDD6FE;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:#6D28D9;font-weight:600">Lotes com esta variação:</span>
+          ${la().map(l=>{const on=vObj.lotes?.includes(l.id);return`<span onclick="toggleLoteVariacao(${fe.varIdx},'${l.id}')" style="font-size:11px;padding:2px 9px;border-radius:10px;border:1px solid ${on?'#6D28D9':'#DDD6FE'};background:${on?'#6D28D9':'white'};color:${on?'white':'#6D28D9'};cursor:pointer">${on?'✓ ':''} ${l.nome}</span>`}).join('')}
+        </div>`;
+      }
+
+      // Tabela de ingredientes
+      const tot=S.formulaEdit.ings.reduce((s,i)=>s+(parseFloat(i.kg)||0),0);
+      const isVar=fe.varIdx!=='padrao';
+      html+=`<div style="padding:14px">
+        <div style="font-size:12px;font-weight:600;color:${isVar?'#6D28D9':'var(--verde)'};margin-bottom:10px">
+          ${isVar?`Variação: ${fm?.variacoes?.[fe.varIdx]?.nome||''}`:'Fórmula padrão'} · 1 batida = 1.000 kg
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
+          <thead><tr style="background:var(--bg);border-bottom:1px solid var(--border)">
+            <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:5px 8px;text-align:left">Ingrediente</th>
+            <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:5px 8px;width:95px">Kg/batida</th>
+            <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:5px 8px;width:55px;text-align:center">%</th>
+            <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:5px 8px;width:80px;text-align:center">Estoque</th>
+            <th style="padding:5px 8px;width:32px"></th>
+          </tr></thead>
+          <tbody>
+            ${fe.ings.map((ing,i)=>`<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px"><input id="ing_nome_${i}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;width:100%;background:var(--bg);font-family:inherit" type="text" value="${ing.nome||''}" placeholder="Nome do ingrediente" oninput="S.formulaEdit.ings[${i}].nome=this.value"></td>
+              <td style="padding:6px 8px"><input id="ing_kg_${i}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;width:100%;background:var(--bg);font-family:inherit" type="number" min="0" step="0.1" value="${ing.kg||0}" oninput="S.formulaEdit.ings[${i}].kg=parseFloat(this.value)||0;atualizarTotalFormula()"></td>
+              <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted);font-family:var(--mono)">${ing.kg?((ing.kg/1000)*100).toFixed(1)+'%':'—'}</td>
+              <td style="padding:6px 8px;text-align:center">
+                <label style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:11px;cursor:pointer">
+                  <input type="checkbox" ${ing.ctrl?'checked':''} onchange="S.formulaEdit.ings[${i}].ctrl=this.checked;render()">
+                  <span>${ing.ctrl?'✅':''}</span>
+                </label>
+              </td>
+              <td style="padding:6px 8px"><button onclick="remIngFormula(${i})" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:13px">✕</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:7px;border:1px solid ${Math.abs(tot-1000)<0.1?'var(--verde-border)':'#FCA5A5'};margin-bottom:10px">
+          <span style="font-size:12px;color:var(--muted)">Total</span>
+          <div>
+            <span style="font-weight:600;font-family:var(--mono);color:${Math.abs(tot-1000)<0.1?'var(--verde)':'#DC2626'}">${tot.toFixed(1)} kg</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:6px">${tot<999.9?`faltam ${(1000-tot).toFixed(1)} kg`:tot>1000.1?`excede ${(tot-1000).toFixed(1)} kg`:'✓ exato'}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="addIngFormula()" style="padding:7px 12px;background:transparent;border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer">+ Ingrediente</button>
+          <button onclick="salvarFormula('${f.id}')" style="flex:1;padding:9px;background:${isVar?'#6D28D9':'var(--verde)'};color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;${Math.abs(tot-1000)>0.5?'opacity:.6;cursor:not-allowed':''}">
+            ${Math.abs(tot-1000)>0.5?`⚠ Total: ${tot.toFixed(0)}kg`:`Salvar ${isVar?'variação':'fórmula padrão'}`}
+          </button>
+        </div>
+      </div>`;
+    }
+    html+='</div>';
+  });
+  return html;
+}
+
+function toggleFaseFormula(faseId){
+  const fe=S.formulaEdit;
+  if(fe.faseId===faseId){S.formulaEdit={faseId:null,varIdx:'padrao',ings:[]};}
+  else{
+    const fm=S.formulas[faseId];
+    S.formulaEdit={faseId,varIdx:'padrao',ings:JSON.parse(JSON.stringify(fm?.padrao?.ings||[{nome:'',kg:0,ctrl:false}]))};
+  }
+  render();
+}
+
+function setVarFormula(varIdx){
+  const fe=S.formulaEdit;const fm=S.formulas[fe.faseId];
+  fe.varIdx=varIdx;
+  if(varIdx==='padrao') fe.ings=JSON.parse(JSON.stringify(fm?.padrao?.ings||[{nome:'',kg:0,ctrl:false}]));
+  else fe.ings=JSON.parse(JSON.stringify(fm?.variacoes?.[varIdx]?.ings||[]));
+  render();
+}
+
+function addIngFormula(){S.formulaEdit.ings.push({nome:'',kg:0,ctrl:false});render();}
+function remIngFormula(i){S.formulaEdit.ings.splice(i,1);render();}
+
+function atualizarTotalFormula(){
+  // Atualiza só o total sem rerender tudo
+  render();
+}
+
+function novaVariacaoFormula(){
+  const nome=prompt('Nome da variação (ex: Alto cálcio, Baixo fósforo):');
+  if(!nome?.trim())return;
+  const fe=S.formulaEdit;
+  if(!S.formulas[fe.faseId])S.formulas[fe.faseId]={padrao:{ings:[]},variacoes:[]};
+  const base=JSON.parse(JSON.stringify(S.formulas[fe.faseId]?.padrao?.ings||[]));
+  S.formulas[fe.faseId].variacoes.push({nome:nome.trim(),lotes:[],ings:base});
+  fe.varIdx=S.formulas[fe.faseId].variacoes.length-1;
+  fe.ings=JSON.parse(JSON.stringify(base));
+  render();
+}
+
+function toggleLoteVariacao(varIdx,loteId){
+  const fm=S.formulas[S.formulaEdit.faseId];
+  if(!fm?.variacoes?.[varIdx])return;
+  const v=fm.variacoes[varIdx];
+  if(!v.lotes)v.lotes=[];
+  const idx=v.lotes.indexOf(loteId);
+  if(idx>=0)v.lotes.splice(idx,1);else v.lotes.push(loteId);
+  render();
+}
+
+async function salvarFormula(faseId){
+  const fe=S.formulaEdit;
+  const tot=fe.ings.reduce((s,i)=>s+(parseFloat(i.kg)||0),0);
+  if(Math.abs(tot-1000)>0.5)return alert('O total precisa ser 1.000 kg.');
+  if(!S.formulas[faseId])S.formulas[faseId]={padrao:{ings:[]},variacoes:[]};
+  const fm=S.formulas[faseId];
+  const ings=JSON.parse(JSON.stringify(fe.ings));
+  if(fe.varIdx==='padrao'){fm.padrao={ings};}
+  else{fm.variacoes[fe.varIdx].ings=ings;}
+  try{
+    await db.collection('formulas_racao').doc(faseId).set(fm);
+    toast(`✓ Fórmula salva — ${FASES_RACAO.find(f=>f.id===faseId)?.nome}!`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+// ── CONFIRMAÇÃO DE TROCA DE FÓRMULA ──────────────────────────────────────────
+async function abrirConfirmacaoTroca(loteId){
+  const lote=S.lotes.find(l=>l.id===loteId);
+  if(!lote)return;
+  const sem=semanas(lote.chegada);
+  const faseAtualId=lote.formula_fase||getFaseAtual(sem)?.id;
+  const proxFase=faseAtualId?getProximaFase(faseAtualId):null;
+  if(!proxFase)return alert('Não há próxima fase para este lote.');
+
+  // Carrega fórmulas disponíveis da próxima fase
+  if(!S.formulas[proxFase.id]){
+    try{const d=await db.collection('formulas_racao').doc(proxFase.id).get();if(d.exists)S.formulas[proxFase.id]=d.data();}
+    catch(e){}
+  }
+  const fm=S.formulas[proxFase.id];
+  const variacoes=fm?.variacoes||[];
+
+  const opcoes=['Padrão',...variacoes.map(v=>v.nome)];
+  const escolha=prompt(`Confirmar troca para ${proxFase.nome}.\n\nFórmula a usar:\n${opcoes.map((o,i)=>`${i===0?'0':i}) ${o}`).join('\n')}\n\nDigite o número:`);
+  if(escolha===null||escolha==='')return;
+  const idx=parseInt(escolha);
+  const formulaVar=idx===0?'padrao':(variacoes[idx-1]?variacoes[idx-1].nome:null);
+  if(formulaVar===null)return alert('Opção inválida.');
+
+  const obs=prompt('Observação (opcional):','');
+
+  try{
+    const historico={
+      data:FS.Timestamp.fromDate(new Date()),
+      de:faseAtualId,
+      para:proxFase.id,
+      semana:sem,
+      formula_variacao:formulaVar,
+      responsavel:S.resp||'—',
+      obs:obs||'',
+    };
+    await db.collection('lotes').doc(loteId).update({
+      formula_fase:proxFase.id,
+      formula_variacao:formulaVar,
+    });
+    await db.collection('lotes').doc(loteId).collection('historico_formula').add(historico);
+    lote.formula_fase=proxFase.id;
+    lote.formula_variacao=formulaVar;
+    toast(`✓ Troca confirmada — ${lote.nome} agora usa ${proxFase.nome}`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
 async function addGen(){
   if(!S.ng)return; if(S.curvas[S.ng])return alert('Já existe.');
   S.curvas[S.ng]={};S.cg=S.ng;S.ng='';S.showAddGen=false;toast('✓ Adicionado!');render();
