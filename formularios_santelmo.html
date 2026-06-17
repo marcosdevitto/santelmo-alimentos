@@ -1083,7 +1083,37 @@ async function subRacao(){
   const totalKg=Object.values(lotesDoc).reduce((s,v)=>s+v.total_kg,0);
   const totalBat=Object.values(lotesDoc).reduce((s,v)=>s+v.batidas,0);
 
+  // Calcula desconto de estoque por ingrediente controlado
+  const descontos={}; // {nomeIng: totalKgDescontado}
+  for(const l of lotesAtivos){
+    const bat=lotesDoc[l.id].batidas;
+    const qtdPorBatida=lotesDoc[l.id].qtd_por_batida;
+    const ratioKg=qtdPorBatida/1000; // ex: 1000kg = 1.0, 500kg = 0.5
+    // Determina fase e fórmula do lote
+    const faseId=l.formula_fase||getFaseAtual(semanas(l.chegada))?.id;
+    if(!faseId)continue;
+    // Carrega fórmula se não estiver em cache
+    if(!S.formulas[faseId]){
+      try{const d=await db.collection('formulas_racao').doc(faseId).get();if(d.exists)S.formulas[faseId]=d.data();}catch(e){}
+    }
+    const fm=S.formulas[faseId];
+    if(!fm)continue;
+    // Usa variação se o lote tiver uma definida nessa fase
+    const varNome=l.formula_variacao;
+    let ings=fm.padrao?.ings||[];
+    if(varNome&&varNome!=='padrao'){
+      const varObj=fm.variacoes?.find(v=>v.nome===varNome&&v.lotes?.includes(l.id));
+      if(varObj)ings=varObj.ings||[];
+    }
+    // Acumula desconto por ingrediente controlado
+    ings.filter(i=>i.ctrl).forEach(i=>{
+      const kg=(i.kg||0)*ratioKg*bat;
+      descontos[i.nome]=(descontos[i.nome]||0)+kg;
+    });
+  }
+
   try{
+    // 1. Salva lançamento de ração
     await db.collection('racao').doc(r.data).set({
       data:FS.Timestamp.fromDate(new Date(r.data+'T12:00:00')),
       responsavel:S.resp,
@@ -1092,7 +1122,32 @@ async function subRacao(){
       total_kg:totalKg,
       total_batidas:totalBat,
     });
-    toast(`✓ Ração registrada! ${totalBat} batidas · ${totalKg.toLocaleString('pt-BR')} kg`);
+
+    // 2. Desconta estoque em paralelo
+    if(Object.keys(descontos).length){
+      const movBatch=db.batch();
+      const promises=Object.entries(descontos).map(async([nome,kg])=>{
+        kg=Math.round(kg*10)/10;
+        const itemRef=db.collection('estoque_itens').doc(nome.toLowerCase().replace(/\s+/g,'_'));
+        const snap=await itemRef.get();
+        const atual=snap.exists?(snap.data().qtd_atual||0):0;
+        await itemRef.set({nome,qtd_atual:Math.max(0,atual-kg),ultima_atualizacao:FS.FieldValue.serverTimestamp()},{merge:true});
+        const movRef=db.collection('estoque_movimentos').doc();
+        movBatch.set(movRef,{
+          ingrediente:nome,tipo:'saida_batida',qtd:kg,
+          data:FS.Timestamp.fromDate(new Date(r.data+'T12:00:00')),
+          responsavel:S.resp,ref:`Ração ${r.data} · ${totalBat} batidas`,
+          timestamp:FS.FieldValue.serverTimestamp(),
+        });
+      });
+      await Promise.all(promises);
+      await movBatch.commit();
+      // Invalida cache do estoque para recarregar na próxima visita
+      S.estoque.carregado=false;
+    }
+
+    const descMsg=Object.keys(descontos).length?` · estoque de ${Object.keys(descontos).length} ingrediente(s) atualizado`:'';
+    toast(`✓ Ração registrada! ${totalBat} batidas · ${totalKg.toLocaleString('pt-BR')} kg${descMsg}`);
     S.racao={data:ONTEM,batidas:{},qtd:{},jaLancado:null,override:false};
     render();
   }catch(e){toast('Erro: '+e.message,false);}
@@ -1400,9 +1455,10 @@ function tEstoque(){
       <div class="row-2">
         <div class="form-group">
           <label>Ingrediente</label>
-          <input type="text" list="ing-list" value="${ne.ingrediente}" placeholder="Nome do ingrediente"
+          <input type="text" list="ing-list" value="${ne.ingrediente}" placeholder="Digite ou escolha da lista"
             oninput="S.estoque.novaEntrada.ingrediente=this.value">
           <datalist id="ing-list">${todosItens.map(n=>`<option value="${n}">`).join('')}</datalist>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Digite qualquer nome — não precisa estar nas fórmulas</div>
         </div>
         <div class="form-group">
           <label>Data de entrada</label>
