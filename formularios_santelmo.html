@@ -291,7 +291,7 @@ const GALPOES = [
   {id:'galpao_galinhas_soltas',label:'Galinhas Soltas'},
   {id:'galpao_recria',        label:'Galpão Recria'},
 ];
-const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas','Fórmulas'];
+const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas','Fórmulas','Estoque'];
 
 // Fases de ração — definição global
 const FASES_RACAO = [
@@ -332,7 +332,8 @@ let S = {
   mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
   // peso
   peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
-  // fórmulas
+  // estoque
+  estoque: {itens:[], movimentos:[], novaEntrada:{ingrediente:'',qtd:'',data:HOJE}, carregado:false},
   formulas: {}, // {faseId: {padrao:{ings:[]}, variacoes:[{nome,lotes:[],ings:[]}]}}
   formulaEdit: {faseId:null, varIdx:'padrao', ings:[]},
   // config lotes
@@ -412,6 +413,7 @@ async function ST(i){
   if(i===3){ S.jaLancado.mort=await verificar('mortalidade',S.md); }
   if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
   if(i===7){ await carregarFormulas(); }
+  if(i===8){ await carregarEstoque(); }
   render();
 }
 
@@ -420,7 +422,7 @@ function render(){
   if(!S.ready)return;
   const activeId   = document.activeElement?.id;
   const selStart   = document.activeElement?.selectionStart;
-  const map=[t0,t1,t2,t3,tPeso,t4,t5,tFormulas];
+  const map=[t0,t1,t2,t3,tPeso,t4,t5,tFormulas,tEstoque];
   document.getElementById('content').innerHTML=map[S.tab]?.()??'';
   if(activeId){const el=document.getElementById(activeId);if(el){el.focus();try{if(selStart!==undefined&&el.setSelectionRange)el.setSelectionRange(selStart,selStart);}catch(e){}}}
 }
@@ -1222,7 +1224,7 @@ function tFormulas(){
             ${fe.ings.map((ing,i)=>`<tr style="border-bottom:1px solid var(--border)">
               <td style="padding:6px 8px"><input id="ing_nome_${i}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;width:100%;background:var(--bg);font-family:inherit" type="text" value="${ing.nome||''}" placeholder="Nome do ingrediente" oninput="S.formulaEdit.ings[${i}].nome=this.value"></td>
               <td style="padding:6px 8px"><input id="ing_kg_${i}" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;width:100%;background:var(--bg);font-family:inherit" type="number" min="0" step="0.1" value="${ing.kg||0}" oninput="S.formulaEdit.ings[${i}].kg=parseFloat(this.value)||0;atualizarTotalFormula()"></td>
-              <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted);font-family:var(--mono)">${ing.kg?((ing.kg/1000)*100).toFixed(1)+'%':'—'}</td>
+              <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted);font-family:var(--mono)" id="ing_pct_${i}">${ing.kg?((ing.kg/1000)*100).toFixed(1)+'%':'—'}</td>
               <td style="padding:6px 8px;text-align:center">
                 <label style="display:flex;align-items:center;justify-content:center;gap:3px;font-size:11px;cursor:pointer">
                   <input type="checkbox" ${ing.ctrl?'checked':''} onchange="S.formulaEdit.ings[${i}].ctrl=this.checked;render()">
@@ -1236,13 +1238,13 @@ function tFormulas(){
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:7px;border:1px solid ${Math.abs(tot-1000)<0.1?'var(--verde-border)':'#FCA5A5'};margin-bottom:10px">
           <span style="font-size:12px;color:var(--muted)">Total</span>
           <div>
-            <span style="font-weight:600;font-family:var(--mono);color:${Math.abs(tot-1000)<0.1?'var(--verde)':'#DC2626'}">${tot.toFixed(1)} kg</span>
-            <span style="font-size:11px;color:var(--muted);margin-left:6px">${tot<999.9?`faltam ${(1000-tot).toFixed(1)} kg`:tot>1000.1?`excede ${(tot-1000).toFixed(1)} kg`:'✓ exato'}</span>
+            <span id="formula-total" style="font-weight:600;font-family:var(--mono);color:${Math.abs(tot-1000)<0.1?'var(--verde)':'#DC2626'}">${tot.toFixed(1)} kg</span>
+            <span id="formula-total-msg" style="font-size:11px;color:var(--muted);margin-left:6px">${tot<999.9?`faltam ${(1000-tot).toFixed(1)} kg`:tot>1000.1?`excede ${(tot-1000).toFixed(1)} kg`:'✓ exato'}</span>
           </div>
         </div>
         <div style="display:flex;gap:8px">
           <button onclick="addIngFormula()" style="padding:7px 12px;background:transparent;border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer">+ Ingrediente</button>
-          <button onclick="salvarFormula('${f.id}')" style="flex:1;padding:9px;background:${isVar?'#6D28D9':'var(--verde)'};color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;${Math.abs(tot-1000)>0.5?'opacity:.6;cursor:not-allowed':''}">
+          <button id="formula-salvar-btn" onclick="salvarFormula('${f.id}')" ${Math.abs(tot-1000)>0.5?'disabled':''} style="flex:1;padding:9px;background:${isVar?'#6D28D9':'var(--verde)'};color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;${Math.abs(tot-1000)>0.5?'opacity:.6;cursor:not-allowed':''}">
             ${Math.abs(tot-1000)>0.5?`⚠ Total: ${tot.toFixed(0)}kg`:`Salvar ${isVar?'variação':'fórmula padrão'}`}
           </button>
         </div>
@@ -1275,8 +1277,31 @@ function addIngFormula(){S.formulaEdit.ings.push({nome:'',kg:0,ctrl:false});rend
 function remIngFormula(i){S.formulaEdit.ings.splice(i,1);render();}
 
 function atualizarTotalFormula(){
-  // Atualiza só o total sem rerender tudo
-  render();
+  const tot=S.formulaEdit.ings.reduce((s,i)=>s+(parseFloat(i.kg)||0),0);
+  const el=document.getElementById('formula-total');
+  const elMsg=document.getElementById('formula-total-msg');
+  const elBtn=document.getElementById('formula-salvar-btn');
+  if(el){
+    el.textContent=tot.toFixed(1)+' kg';
+    el.style.color=Math.abs(tot-1000)<0.1?'var(--verde)':'#DC2626';
+  }
+  if(elMsg){
+    elMsg.textContent=tot<999.9?`faltam ${(1000-tot).toFixed(1)} kg`:tot>1000.1?`excede ${(tot-1000).toFixed(1)} kg`:'✓ exato';
+  }
+  if(elBtn){
+    const ok=Math.abs(tot-1000)<=0.5;
+    const isVar=S.formulaEdit.varIdx!=='padrao';
+    elBtn.disabled=!ok;
+    elBtn.style.opacity=ok?'1':'0.6';
+    elBtn.style.cursor=ok?'pointer':'not-allowed';
+    elBtn.textContent=ok?`Salvar ${isVar?'variação':'fórmula padrão'}`:`⚠ Total: ${tot.toFixed(0)}kg`;
+    // Atualiza % de cada ingrediente
+    S.formulaEdit.ings.forEach((_,i)=>{
+      const pEl=document.getElementById(`ing_pct_${i}`);
+      const kg=S.formulaEdit.ings[i].kg||0;
+      if(pEl) pEl.textContent=kg?((kg/1000)*100).toFixed(1)+'%':'—';
+    });
+  }
 }
 
 function novaVariacaoFormula(){
@@ -1316,7 +1341,143 @@ async function salvarFormula(faseId){
     render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
-// ── CONFIRMAÇÃO DE TROCA DE FÓRMULA ──────────────────────────────────────────
+// ── TAB ESTOQUE ───────────────────────────────────────────────────────────────
+async function carregarEstoque(){
+  if(S.estoque.carregado)return;
+  try{
+    const [itensSnap,movSnap]=await Promise.all([
+      db.collection('estoque_itens').orderBy('nome').get(),
+      db.collection('estoque_movimentos').orderBy('data','desc').limit(50).get(),
+    ]);
+    S.estoque.itens=itensSnap.docs.map(d=>({id:d.id,...d.data()}));
+    S.estoque.movimentos=movSnap.docs.map(d=>({id:d.id,...d.data()}));
+    S.estoque.carregado=true;
+    render();
+  }catch(e){toast('Erro ao carregar estoque: '+e.message,false);}
+}
+
+function tEstoque(){
+  const E=S.estoque;
+  const ne=E.novaEntrada;
+
+  // Coleta ingredientes controlados de todas as fórmulas
+  const ingsControlados=new Set();
+  Object.values(S.formulas).forEach(fm=>{
+    (fm.padrao?.ings||[]).filter(i=>i.ctrl).forEach(i=>ingsControlados.add(i.nome));
+    (fm.variacoes||[]).forEach(v=>(v.ings||[]).filter(i=>i.ctrl).forEach(i=>ingsControlados.add(i.nome)));
+  });
+  // Junta com itens já cadastrados no estoque
+  const todosItens=[...new Set([...E.itens.map(i=>i.nome),...ingsControlados])].sort();
+
+  // Calcula saldo atual por ingrediente
+  const saldos={};
+  E.itens.forEach(i=>{ saldos[i.nome]={qtd:i.qtd_atual||0,min:i.estoque_minimo||0}; });
+
+  // Cards de estoque
+  const cardsHtml=Object.entries(saldos).length?Object.entries(saldos).sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,v])=>{
+    const pct=v.min>0?Math.min(100,Math.round(v.qtd/v.min*100)):100;
+    const status=v.min>0?(v.qtd<=0?'zerado':v.qtd<v.min?'baixo':'ok'):'ok';
+    const cor=status==='zerado'?'#DC2626':status==='baixo'?'#D97706':'#1B4D35';
+    return`<div style="border:1px solid ${status==='ok'?'var(--verde-border)':status==='baixo'?'#FDE68A':'#FCA5A5'};border-radius:10px;padding:12px 14px;background:${status==='ok'?'var(--verde-light)':status==='baixo'?'#FFFBEB':'#FEF2F2'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:500">${nome}</span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${cor};flex-shrink:0"></span>
+      </div>
+      <div style="font-size:20px;font-weight:500;font-family:var(--mono);color:${cor}">${(v.qtd||0).toLocaleString('pt-BR')} kg</div>
+      ${v.min>0?`<div style="font-size:11px;color:var(--muted);margin-top:2px">mínimo: ${v.min.toLocaleString('pt-BR')} kg</div>
+      <div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:6px">
+        <div style="height:100%;width:${pct}%;background:${cor};border-radius:3px;transition:width .3s"></div>
+      </div>`:`<div style="font-size:11px;color:var(--muted);margin-top:2px">sem mínimo definido</div>`}
+    </div>`;
+  }).join(''):
+  `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:13px;font-style:italic">Nenhum item no estoque ainda. Registre a primeira entrada abaixo.</div>`;
+
+  return`
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">${cardsHtml}</div>
+
+    <div class="stitle">Registrar entrada</div>
+    <div style="border:1px solid var(--verde-border);border-radius:10px;padding:14px;background:var(--verde-light);margin-bottom:16px">
+      <div class="row-2">
+        <div class="form-group">
+          <label>Ingrediente</label>
+          <input type="text" list="ing-list" value="${ne.ingrediente}" placeholder="Nome do ingrediente"
+            oninput="S.estoque.novaEntrada.ingrediente=this.value">
+          <datalist id="ing-list">${todosItens.map(n=>`<option value="${n}">`).join('')}</datalist>
+        </div>
+        <div class="form-group">
+          <label>Data de entrada</label>
+          <input type="date" value="${ne.data}" max="${HOJE}" oninput="S.estoque.novaEntrada.data=this.value">
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="form-group">
+          <label>Quantidade (kg)</label>
+          <input type="number" min="0" step="0.1" value="${ne.qtd}" placeholder="ex: 5000"
+            oninput="S.estoque.novaEntrada.qtd=this.value">
+        </div>
+        <div class="form-group">
+          <label>Estoque mínimo (kg)</label>
+          <input type="number" min="0" step="1" placeholder="ex: 500" id="inp-estoque-min"
+            value="${saldos[ne.ingrediente]?.min||''}">
+        </div>
+      </div>
+      <button class="btn-sub" onclick="registrarEntradaEstoque()">Registrar entrada no estoque</button>
+    </div>
+
+    <div class="stitle">Últimas movimentações</div>
+    ${E.movimentos.length?`
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--bg)">
+          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Data</th>
+          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ingrediente</th>
+          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Tipo</th>
+          <th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Kg</th>
+          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ref.</th>
+        </tr></thead>
+        <tbody>
+          ${E.movimentos.map(m=>{
+            const dt=m.data?.toDate?m.data.toDate():new Date(m.data);
+            const isEntrada=m.tipo==='entrada';
+            return`<tr style="border-top:1px solid var(--border)">
+              <td style="padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--muted)">${dt.toLocaleDateString('pt-BR')}</td>
+              <td style="padding:6px 10px;font-weight:500">${m.ingrediente}</td>
+              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':'#FEE2E2'};color:${isEntrada?'#065F46':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':'#FCA5A5'}">${isEntrada?'entrada':'saída batida'}</span></td>
+              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':'#DC2626'}">${isEntrada?'+':'−'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
+              <td style="padding:6px 10px;font-size:11px;color:var(--muted)">${m.ref||'—'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`:`<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px;font-style:italic">Nenhuma movimentação registrada.</div>`}`;
+}
+
+async function registrarEntradaEstoque(){
+  const ne=S.estoque.novaEntrada;
+  if(!ne.ingrediente.trim())return alert('Informe o ingrediente.');
+  if(!ne.qtd||parseFloat(ne.qtd)<=0)return alert('Informe a quantidade em kg.');
+  if(!S.resp)return alert('Informe o responsável.');
+  const qtd=parseFloat(ne.qtd);
+  const min=parseFloat(document.getElementById('inp-estoque-min')?.value||0)||0;
+  try{
+    const itemRef=db.collection('estoque_itens').doc(ne.ingrediente.toLowerCase().replace(/\s+/g,'_'));
+    const itemSnap=await itemRef.get();
+    const qtdAtual=itemSnap.exists?(itemSnap.data().qtd_atual||0):0;
+    await itemRef.set({nome:ne.ingrediente,qtd_atual:qtdAtual+qtd,estoque_minimo:min||0,ultima_atualizacao:FS.FieldValue.serverTimestamp()},{merge:true});
+    await db.collection('estoque_movimentos').add({
+      ingrediente:ne.ingrediente,tipo:'entrada',qtd,data:FS.Timestamp.fromDate(new Date(ne.data+'T12:00:00')),
+      responsavel:S.resp,ref:'compra',timestamp:FS.FieldValue.serverTimestamp(),
+    });
+    // Atualiza estado local
+    const idx=S.estoque.itens.findIndex(i=>i.nome===ne.ingrediente);
+    if(idx>=0){S.estoque.itens[idx].qtd_atual=qtdAtual+qtd;if(min)S.estoque.itens[idx].estoque_minimo=min;}
+    else{S.estoque.itens.push({id:ne.ingrediente,nome:ne.ingrediente,qtd_atual:qtdAtual+qtd,estoque_minimo:min});}
+    S.estoque.movimentos.unshift({ingrediente:ne.ingrediente,tipo:'entrada',qtd,data:FS.Timestamp.fromDate(new Date(ne.data+'T12:00:00')),ref:'compra'});
+    toast(`✓ Entrada registrada: ${qtd.toLocaleString('pt-BR')} kg de ${ne.ingrediente}`);
+    S.estoque.novaEntrada={ingrediente:'',qtd:'',data:HOJE};
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
 async function abrirConfirmacaoTroca(loteId){
   const lote=S.lotes.find(l=>l.id===loteId);
   if(!lote)return;
