@@ -333,7 +333,7 @@ let S = {
   // peso
   peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
   // estoque
-  estoque: {itens:[], movimentos:[], novaEntrada:{ingrediente:'',qtd:'',data:HOJE}, carregado:false},
+  estoque: {itens:[], movimentos:[], novaEntrada:{ingrediente:'',qtd:'',data:HOJE}, carregado:false, editandoMov:null},
   formulas: {}, // {faseId: {padrao:{ings:[]}, variacoes:[{nome,lotes:[],ings:[]}]}}
   formulaEdit: {faseId:null, varIdx:'padrao', ings:[]},
   // config lotes
@@ -1421,34 +1421,103 @@ function tEstoque(){
     (fm.padrao?.ings||[]).filter(i=>i.ctrl).forEach(i=>ingsControlados.add(i.nome));
     (fm.variacoes||[]).forEach(v=>(v.ings||[]).filter(i=>i.ctrl).forEach(i=>ingsControlados.add(i.nome)));
   });
-  // Junta com itens já cadastrados no estoque
   const todosItens=[...new Set([...E.itens.map(i=>i.nome),...ingsControlados])].sort();
-
-  // Calcula saldo atual por ingrediente
   const saldos={};
-  E.itens.forEach(i=>{ saldos[i.nome]={qtd:i.qtd_atual||0,min:i.estoque_minimo||0}; });
+  E.itens.forEach(i=>{ saldos[i.nome]={qtd:i.qtd_atual||0,min:i.estoque_minimo||0,kgSaco:i.kg_por_saco||null}; });
 
-  // Cards de estoque
-  const cardsHtml=Object.entries(saldos).length?Object.entries(saldos).sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,v])=>{
-    const pct=v.min>0?Math.min(100,Math.round(v.qtd/v.min*100)):100;
-    const status=v.min>0?(v.qtd<=0?'zerado':v.qtd<v.min?'baixo':'ok'):'ok';
-    const cor=status==='zerado'?'#DC2626':status==='baixo'?'#D97706':'#1B4D35';
-    return`<div style="border:1px solid ${status==='ok'?'var(--verde-border)':status==='baixo'?'#FDE68A':'#FCA5A5'};border-radius:10px;padding:12px 14px;background:${status==='ok'?'var(--verde-light)':status==='baixo'?'#FFFBEB':'#FEF2F2'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:500">${nome}</span>
-        <span style="width:8px;height:8px;border-radius:50%;background:${cor};flex-shrink:0"></span>
-      </div>
-      <div style="font-size:20px;font-weight:500;font-family:var(--mono);color:${cor}">${(v.qtd||0).toLocaleString('pt-BR')} kg</div>
-      ${v.min>0?`<div style="font-size:11px;color:var(--muted);margin-top:2px">mínimo: ${v.min.toLocaleString('pt-BR')} kg</div>
-      <div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:6px">
-        <div style="height:100%;width:${pct}%;background:${cor};border-radius:3px;transition:width .3s"></div>
-      </div>`:`<div style="font-size:11px;color:var(--muted);margin-top:2px">sem mínimo definido</div>`}
-    </div>`;
-  }).join(''):
-  `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:13px;font-style:italic">Nenhum item no estoque ainda. Registre a primeira entrada abaixo.</div>`;
+  // Helper: formata qtd em sacos ou kg
+  function fmtQtd(nome,kg){
+    const ks=saldos[nome]?.kgSaco;
+    if(ks&&ks>0){const sacos=kg/ks;return`${sacos%1===0?sacos:sacos.toFixed(1)} sc <span style="font-size:11px;color:var(--muted)">(${kg.toLocaleString('pt-BR')} kg)</span>`;}
+    return`${(kg||0).toLocaleString('pt-BR')} kg`;
+  }
+  function fmtMin(nome,kg){
+    const ks=saldos[nome]?.kgSaco;
+    if(ks&&ks>0)return`${(kg/ks).toFixed(1)} sc (${kg.toLocaleString('pt-BR')} kg)`;
+    return`${kg.toLocaleString('pt-BR')} kg`;
+  }
+
+  // Cards
+  const cardsHtml=Object.entries(saldos).length
+    ?Object.entries(saldos).sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,v])=>{
+      const pct=v.min>0?Math.min(100,Math.round(v.qtd/v.min*100)):100;
+      const status=v.qtd<=0?'zero':v.min>0&&v.qtd<v.min?'baixo':'ok';
+      const cor=status==='ok'?'#1B4D35':status==='baixo'?'#D97706':'#DC2626';
+      const bord=status==='ok'?'var(--verde-border)':status==='baixo'?'#FDE68A':'#FCA5A5';
+      const bg=status==='ok'?'var(--verde-light)':status==='baixo'?'#FFFBEB':'#FEF2F2';
+      const itemObj=E.itens.find(i=>i.nome===nome);
+      return`<div style="border:1px solid ${bord};border-radius:10px;padding:12px 14px;background:${bg}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:500">${nome}</span>
+          <button onclick="abrirConfigItem('${nome}')" title="Configurar item"
+            style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px">⚙</button>
+        </div>
+        <div style="font-size:20px;font-weight:500;font-family:var(--mono);color:${cor}">${fmtQtd(nome,v.qtd)}</div>
+        ${v.min>0?`<div style="font-size:11px;color:var(--muted);margin-top:2px">mín: ${fmtMin(nome,v.min)}</div>
+        <div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:5px">
+          <div style="height:100%;width:${pct}%;background:${cor};border-radius:3px"></div>
+        </div>`:`<div style="font-size:11px;color:var(--muted);margin-top:2px">sem mínimo definido</div>`}
+      </div>`;
+    }).join('')
+    :`<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:13px;font-style:italic">Nenhum item no estoque ainda.</div>`;
+
+  // Movimentações com edição
+  const movHtml=E.movimentos.length?`
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--bg)">
+          <th style="padding:6px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Data</th>
+          <th style="padding:6px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ingrediente</th>
+          <th style="padding:6px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Tipo</th>
+          <th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Kg</th>
+          <th style="padding:6px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ref.</th>
+          <th style="padding:6px 10px;width:36px"></th>
+        </tr></thead>
+        <tbody>
+          ${E.movimentos.map((m,idx)=>{
+            const dt=m.data?.toDate?m.data.toDate():new Date(m.data);
+            const isEntrada=m.tipo==='entrada';
+            const isEdit=E.editandoMov===idx;
+            if(isEdit){
+              return`<tr style="border-top:1px solid var(--border);background:#FFFBEB">
+                <td style="padding:6px 8px" colspan="2">
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <input type="date" id="edit-data" value="${dt.toISOString().split('T')[0]}"
+                      style="padding:4px 7px;border:1.5px solid #FDE68A;border-radius:6px;font-size:11px">
+                    <input type="number" id="edit-qtd" value="${m.qtd||0}" step="0.1" min="0"
+                      style="padding:4px 7px;border:1.5px solid #FDE68A;border-radius:6px;font-size:11px;width:90px">
+                    <span style="font-size:11px;color:var(--muted)">kg</span>
+                  </div>
+                </td>
+                <td style="padding:6px 8px" colspan="3">
+                  <div style="font-size:11px;color:#92400E">⚠ O saldo será recalculado (dif. da qtd antiga)</div>
+                </td>
+                <td style="padding:6px 8px">
+                  <div style="display:flex;gap:4px">
+                    <button onclick="salvarEdicaoMov(${idx})" style="padding:3px 9px;background:#1B4D35;color:white;border:none;border-radius:5px;font-size:11px;cursor:pointer">✓</button>
+                    <button onclick="S.estoque.editandoMov=null;render()" style="padding:3px 7px;background:transparent;border:1px solid var(--border);border-radius:5px;font-size:11px;cursor:pointer">✕</button>
+                  </div>
+                </td>
+              </tr>`;
+            }
+            return`<tr style="border-top:1px solid var(--border)">
+              <td style="padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--muted)">${dt.toLocaleDateString('pt-BR')}</td>
+              <td style="padding:6px 10px;font-weight:500">${m.ingrediente}</td>
+              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':'#FEE2E2'};color:${isEntrada?'#065F46':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':'#FCA5A5'}">${isEntrada?'entrada':'saída batida'}</span></td>
+              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':'#DC2626'}">${isEntrada?'+':'−'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
+              <td style="padding:6px 10px;font-size:11px;color:var(--muted)">${m.ref||'—'}</td>
+              <td style="padding:6px 10px;text-align:center">
+                ${isEntrada?`<button onclick="S.estoque.editandoMov=${idx};render()" title="Editar"
+                  style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px">✏</button>`:''}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`:`<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px;font-style:italic">Nenhuma movimentação registrada.</div>`;
 
   return`
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">${cardsHtml}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:16px">${cardsHtml}</div>
 
     <div class="stitle">Registrar entrada</div>
     <div style="border:1px solid var(--verde-border);border-radius:10px;padding:14px;background:var(--verde-light);margin-bottom:16px">
@@ -1481,31 +1550,56 @@ function tEstoque(){
     </div>
 
     <div class="stitle">Últimas movimentações</div>
-    ${E.movimentos.length?`
-    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:var(--bg)">
-          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Data</th>
-          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ingrediente</th>
-          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Tipo</th>
-          <th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Kg</th>
-          <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ref.</th>
-        </tr></thead>
-        <tbody>
-          ${E.movimentos.map(m=>{
-            const dt=m.data?.toDate?m.data.toDate():new Date(m.data);
-            const isEntrada=m.tipo==='entrada';
-            return`<tr style="border-top:1px solid var(--border)">
-              <td style="padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--muted)">${dt.toLocaleDateString('pt-BR')}</td>
-              <td style="padding:6px 10px;font-weight:500">${m.ingrediente}</td>
-              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':'#FEE2E2'};color:${isEntrada?'#065F46':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':'#FCA5A5'}">${isEntrada?'entrada':'saída batida'}</span></td>
-              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':'#DC2626'}">${isEntrada?'+':'−'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
-              <td style="padding:6px 10px;font-size:11px;color:var(--muted)">${m.ref||'—'}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`:`<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px;font-style:italic">Nenhuma movimentação registrada.</div>`}`;
+    ${movHtml}`;
+}
+
+async function abrirConfigItem(nome){
+  const item=S.estoque.itens.find(i=>i.nome===nome);
+  const kgAtual=item?.kg_por_saco||'';
+  const minAtual=item?.estoque_minimo||'';
+  const novoKg=prompt(`Configurar "${nome}"\n\nKg por saco (deixe vazio para mostrar em kg):\nAtual: ${kgAtual||'sem saco definido'}`,kgAtual);
+  if(novoKg===null)return;
+  const novoMin=prompt(`Estoque mínimo em kg:\nAtual: ${minAtual||'sem mínimo'}`,minAtual);
+  if(novoMin===null)return;
+  try{
+    const itemRef=db.collection('estoque_itens').doc(nome.toLowerCase().replace(/\s+/g,'_'));
+    const upd={estoque_minimo:parseFloat(novoMin)||0};
+    if(novoKg&&parseFloat(novoKg)>0)upd.kg_por_saco=parseFloat(novoKg);
+    else upd.kg_por_saco=null;
+    await itemRef.set(upd,{merge:true});
+    const idx=S.estoque.itens.findIndex(i=>i.nome===nome);
+    if(idx>=0)Object.assign(S.estoque.itens[idx],upd);
+    toast(`✓ ${nome} configurado`);render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
+async function salvarEdicaoMov(idx){
+  const m=S.estoque.movimentos[idx];
+  if(!m?.id)return;
+  const novaQtd=parseFloat(document.getElementById('edit-qtd')?.value||0);
+  const novaData=document.getElementById('edit-data')?.value;
+  if(!novaQtd||novaQtd<=0)return alert('Informe uma quantidade válida.');
+  const diff=novaQtd-(m.qtd||0); // diferença para ajustar o saldo
+  try{
+    await db.collection('estoque_movimentos').doc(m.id).update({
+      qtd:novaQtd,
+      data:FS.Timestamp.fromDate(new Date(novaData+'T12:00:00')),
+    });
+    // Ajusta saldo do item
+    const itemRef=db.collection('estoque_itens').doc(m.ingrediente.toLowerCase().replace(/\s+/g,'_'));
+    const snap=await itemRef.get();
+    const atual=snap.exists?(snap.data().qtd_atual||0):0;
+    const novoSaldo=Math.max(0,atual+diff);
+    await itemRef.update({qtd_atual:novoSaldo});
+    // Atualiza estado local
+    const itemIdx=S.estoque.itens.findIndex(i=>i.nome===m.ingrediente);
+    if(itemIdx>=0)S.estoque.itens[itemIdx].qtd_atual=novoSaldo;
+    S.estoque.movimentos[idx].qtd=novaQtd;
+    S.estoque.movimentos[idx].data=FS.Timestamp.fromDate(new Date(novaData+'T12:00:00'));
+    S.estoque.editandoMov=null;
+    toast(`✓ Lançamento corrigido — saldo ajustado em ${diff>0?'+':''}${diff.toFixed(1)} kg`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
 }
 
 async function registrarEntradaEstoque(){
