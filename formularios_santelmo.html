@@ -954,7 +954,13 @@ function t4(){
           }
           return`${selectorHtml}${alertHtml}`;
         })()}
-        <div style="display:flex;gap:8px;margin-top:10px">${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          ${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}
+          ${l.ativo?`<button class="btn-sm" onclick="abrirCorrecaoFase('${l.id}')"
+            style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer">
+            🔄 Corrigir fase
+          </button>`:''}
+        </div>
       </div>`;
     }).join('')}
     <button class="btn-add" onclick="S.showAdd=!S.showAdd;render()">+ Adicionar novo lote</button>
@@ -1221,6 +1227,66 @@ async function encerrarLote(id){
   try{ await db.collection('lotes').doc(id).update({ativo:false}); S.lotes.find(l=>l.id===id).ativo=false; toast('Lote encerrado.');render(); }
   catch(e){toast('Erro: '+e.message,false);}
 }
+function abrirCorrecaoFase(loteId){
+  const lote=S.lotes.find(l=>l.id===loteId);
+  if(!lote)return;
+  const modal=document.getElementById('modal-correcao-fase');
+  const nomEl=document.getElementById('modal-fase-lote-nome');
+  const opEl=document.getElementById('modal-fase-opcoes');
+  if(!modal||!nomEl||!opEl)return;
+
+  const sem=semanas(lote.chegada);
+  const faseAtual=lote.formula_fase||getFaseAtual(sem)?.id||null;
+
+  nomEl.textContent=`${lote.nome} · ${lote.gen} · sem ${sem}`;
+
+  opEl.innerHTML=FASES_RACAO.map(f=>{
+    const isAtual=f.id===faseAtual;
+    const temFormula=!!S.formulas[f.id]?.padrao?.ings?.length;
+    return`<button onclick="confirmarCorrecaoFase('${loteId}','${f.id}')"
+      style="padding:10px 14px;border-radius:8px;border:1.5px solid ${isAtual?'var(--verde)':'var(--border)'};
+        background:${isAtual?'var(--verde-light)':'var(--card)'};color:${isAtual?'var(--verde)':'var(--ink)'};
+        font-size:13px;cursor:pointer;font-family:inherit;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>${isAtual?'✓ ':''}${f.nome}<span style="font-size:11px;color:var(--muted);margin-left:4px">${f.diasDesc}</span></span>
+      ${!temFormula?`<span style="font-size:10px;color:#D97706;background:#FEF3C7;padding:2px 6px;border-radius:6px">sem fórmula</span>`:''}
+    </button>`;
+  }).join('');
+
+  modal.style.display='flex';
+}
+
+function fecharCorrecaoFase(){
+  const modal=document.getElementById('modal-correcao-fase');
+  if(modal)modal.style.display='none';
+}
+
+async function confirmarCorrecaoFase(loteId, novaFaseId){
+  const lote=S.lotes.find(l=>l.id===loteId);
+  const fase=FASES_RACAO.find(f=>f.id===novaFaseId);
+  if(!lote||!fase)return;
+  try{
+    await db.collection('lotes').doc(loteId).update({
+      formula_fase:novaFaseId,
+      formula_variacao:'padrao',
+    });
+    // Registra no histórico
+    await db.collection('lotes').doc(loteId).collection('historico_formula').add({
+      data:FS.Timestamp.fromDate(new Date()),
+      de:lote.formula_fase||'—',
+      para:novaFaseId,
+      semana:semanas(lote.chegada),
+      formula_variacao:'padrao',
+      responsavel:S.resp||'—',
+      obs:'Correção manual de fase',
+    });
+    lote.formula_fase=novaFaseId;
+    lote.formula_variacao='padrao';
+    fecharCorrecaoFase();
+    toast(`✓ ${lote.nome} corrigido para ${fase.nome}`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
+
 async function selecionarFormula(loteId, faseId, variacao){
   try{
     await db.collection('lotes').doc(loteId).update({
@@ -1813,5 +1879,21 @@ function sair(){
   if(confirm('Deseja sair?')) auth.signOut();
 }
 </script>
+<!-- MODAL CORREÇÃO DE FASE -->
+<div id="modal-correcao-fase" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)fecharCorrecaoFase()">
+  <div style="background:var(--card);border-radius:14px;padding:20px;width:min(420px,100%);box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:500;margin-bottom:4px">Corrigir fase da fórmula</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px" id="modal-fase-lote-nome">—</div>
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Selecione a fase correta</div>
+    <div id="modal-fase-opcoes" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px"></div>
+    <div style="font-size:11px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;padding:8px 12px;margin-bottom:14px">
+      ⚠ A variação voltará para <strong>Padrão</strong>. Selecione outra variação após confirmar se necessário.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharCorrecaoFase()" style="flex:1;padding:10px;background:transparent;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
