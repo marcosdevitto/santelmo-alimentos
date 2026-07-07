@@ -810,9 +810,12 @@ function renderTrocaFormula(){
     const faseTeorObj=FASES_RACAO.find(f=>f.id===faseTeorId);
     const proxFase=faseAtualObj?getProximaFase(faseAtualObj.id):null;
     const semsParaTroca=proxFase?proxFase.semIni-sem:null;
-    const atrasada=faseAtualId&&faseTeorId&&faseAtualId!==faseTeorId;
-    const item={id,nome:meta.nome,gen:meta.gen,sem,faseAtualObj,faseTeorObj,proxFase,semsParaTroca,atrasada};
-    if(atrasada||(semsParaTroca!==null&&semsParaTroca<=3&&semsParaTroca>=0))alertas.push(item);
+    const faseAtualIdx=FASES_RACAO.findIndex(f=>f.id===faseAtualId);
+    const faseTeorIdx=FASES_RACAO.findIndex(f=>f.id===faseTeorId);
+    const atrasada=faseAtualId&&faseTeorId&&faseAtualIdx<faseTeorIdx; // só atrasada se fase manual for ANTERIOR à teórica
+    const adiantado=faseAtualId&&faseTeorId&&faseAtualIdx>faseTeorIdx;
+    const item={id,nome:meta.nome,gen:meta.gen,sem,faseAtualObj,faseTeorObj,proxFase,semsParaTroca,atrasada,adiantado};
+    if(atrasada||(semsParaTroca!==null&&semsParaTroca<=3&&semsParaTroca>=0&&!adiantado))alertas.push(item);
     else emDia.push(item);
   });
 

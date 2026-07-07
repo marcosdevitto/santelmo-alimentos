@@ -911,7 +911,10 @@ function t4(){
           const faseTeor=getFaseAtual(sem);
           const proxFase=faseObj?getProximaFase(faseObj.id):null;
           const semsParaTroca=proxFase?proxFase.semIni-sem:null;
-          const atrasada=faseObj&&faseTeor&&faseObj.id!==faseTeor.id;
+          const faseAtualIdx=FASES_RACAO.findIndex(f=>f.id===faseAtual);
+          const faseTeorIdx=FASES_RACAO.findIndex(f=>f.id===faseTeor?.id);
+          const atrasada=faseObj&&faseTeor&&faseAtualIdx<faseTeorIdx;
+          const adiantado=faseObj&&faseTeor&&faseAtualIdx>faseTeorIdx;
           if(!faseObj)return'';
 
           // Opções de fórmula disponíveis para a fase atual
@@ -945,6 +948,10 @@ function t4(){
             alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
               <span style="font-size:11px;color:#991B1B">🔴 Fase teórica já é <strong>${faseTeor?.nome}</strong> — troca não confirmada</span>
               <button onclick="abrirConfirmacaoTroca('${l.id}')" style="padding:5px 12px;background:#DC2626;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar →</button>
+            </div>`;
+          } else if(adiantado){
+            alertHtml=`<div style="margin-top:6px;padding:7px 10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:7px;font-size:11px;color:#1E40AF">
+              ℹ️ Fase adiantada manualmente — fase teórica ainda é <strong>${faseTeor?.nome}</strong>
             </div>`;
           } else if(proxFase&&semsParaTroca<=3&&semsParaTroca>=0){
             alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
