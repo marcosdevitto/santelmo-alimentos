@@ -1121,37 +1121,55 @@ async function subRacao(){
   const totalKg=Object.values(lotesDoc).reduce((s,v)=>s+v.total_kg,0);
   const totalBat=Object.values(lotesDoc).reduce((s,v)=>s+v.batidas,0);
 
-  // Calcula desconto de estoque por ingrediente controlado
-  const descontos={}; // {nomeIng: totalKgDescontado}
-  for(const l of lotesAtivos){
-    const bat=lotesDoc[l.id].batidas;
-    const qtdPorBatida=lotesDoc[l.id].qtd_por_batida;
-    const ratioKg=qtdPorBatida/1000; // ex: 1000kg = 1.0, 500kg = 0.5
-    // Determina fase e fórmula do lote
-    const faseId=l.formula_fase||getFaseAtual(semanas(l.chegada))?.id;
-    if(!faseId)continue;
-    // Carrega fórmula se não estiver em cache
-    if(!S.formulas[faseId]){
-      try{const d=await db.collection('formulas_racao').doc(faseId).get();if(d.exists)S.formulas[faseId]=d.data();}catch(e){}
+  // Função auxiliar: calcula descontos de estoque para um conjunto de lotes
+  async function calcDescontos(lotesObj){
+    const desc={};
+    for(const [loteId,v] of Object.entries(lotesObj)){
+      const lote=S.lotes.find(l=>l.id===loteId);if(!lote)continue;
+      const bat=v.batidas||0;const qtdPorBatida=v.qtd_por_batida||1000;
+      const ratioKg=qtdPorBatida/1000;
+      const faseId=lote.formula_fase||getFaseAtual(semanas(lote.chegada))?.id;
+      if(!faseId)continue;
+      if(!S.formulas[faseId]){
+        try{const d=await db.collection('formulas_racao').doc(faseId).get();if(d.exists)S.formulas[faseId]=d.data();}catch(e){}
+      }
+      const fm=S.formulas[faseId];if(!fm)continue;
+      const varNome=lote.formula_variacao;
+      let ings=fm.padrao?.ings||[];
+      if(varNome&&varNome!=='padrao'){
+        const varObj=fm.variacoes?.find(v=>v.nome===varNome&&v.lotes?.includes(loteId));
+        if(varObj)ings=varObj.ings||[];
+      }
+      ings.filter(i=>i.ctrl).forEach(i=>{
+        const kg=Math.round((i.kg||0)*ratioKg*bat*10)/10;
+        desc[i.nome]=(desc[i.nome]||0)+kg;
+      });
     }
-    const fm=S.formulas[faseId];
-    if(!fm)continue;
-    // Usa variação se o lote tiver uma definida nessa fase
-    const varNome=l.formula_variacao;
-    let ings=fm.padrao?.ings||[];
-    if(varNome&&varNome!=='padrao'){
-      const varObj=fm.variacoes?.find(v=>v.nome===varNome&&v.lotes?.includes(l.id));
-      if(varObj)ings=varObj.ings||[];
-    }
-    // Acumula desconto por ingrediente controlado
-    ings.filter(i=>i.ctrl).forEach(i=>{
-      const kg=(i.kg||0)*ratioKg*bat;
-      descontos[i.nome]=(descontos[i.nome]||0)+kg;
-    });
+    return desc;
   }
 
   try{
-    // 1. Salva lançamento de ração
+    // Se for correção, busca o documento anterior para calcular estorno
+    let descontosAntigos={};
+    if(r.override&&r.jaLancado?.lotes){
+      descontosAntigos=await calcDescontos(r.jaLancado.lotes);
+    }
+
+    // Calcula novos descontos
+    const descontosNovos=await calcDescontos(lotesDoc);
+
+    // Calcula diferença líquida por ingrediente
+    // positivo = precisa descontar mais / negativo = precisa devolver
+    const todosIngs=new Set([...Object.keys(descontosAntigos),...Object.keys(descontosNovos)]);
+    const diferencas={};
+    todosIngs.forEach(nome=>{
+      const ant=descontosAntigos[nome]||0;
+      const nov=descontosNovos[nome]||0;
+      const diff=Math.round((nov-ant)*10)/10;
+      if(Math.abs(diff)>0.01)diferencas[nome]=diff;
+    });
+
+    // 1. Salva lançamento de ração (sobrescreve)
     await db.collection('racao').doc(r.data).set({
       data:FS.Timestamp.fromDate(new Date(r.data+'T12:00:00')),
       responsavel:S.resp,
@@ -1161,31 +1179,45 @@ async function subRacao(){
       total_batidas:totalBat,
     });
 
-    // 2. Desconta estoque em paralelo
-    if(Object.keys(descontos).length){
+    // 2. Aplica diferença líquida no estoque
+    if(Object.keys(diferencas).length){
+      // Remove movimentações antigas desta data para não duplicar histórico
+      if(r.override){
+        const movsAntigos=await db.collection('estoque_movimentos')
+          .where('ref','==',`Ração ${r.data} · ${r.jaLancado?.total_batidas||0} batidas`)
+          .get();
+        const delBatch=db.batch();
+        movsAntigos.docs.forEach(d=>delBatch.delete(d.ref));
+        if(movsAntigos.docs.length)await delBatch.commit();
+      }
+
       const movBatch=db.batch();
-      const promises=Object.entries(descontos).map(async([nome,kg])=>{
-        kg=Math.round(kg*10)/10;
+      const promises=Object.entries(diferencas).map(async([nome,diff])=>{
         const itemRef=db.collection('estoque_itens').doc(nome.toLowerCase().replace(/\s+/g,'_'));
         const snap=await itemRef.get();
         const atual=snap.exists?(snap.data().qtd_atual||0):0;
-        await itemRef.set({nome,qtd_atual:Math.max(0,atual-kg),ultima_atualizacao:FS.FieldValue.serverTimestamp()},{merge:true});
+        const novoSaldo=Math.max(0,atual-diff);
+        await itemRef.set({nome,qtd_atual:novoSaldo,ultima_atualizacao:FS.FieldValue.serverTimestamp()},{merge:true});
+        // Registra movimentação com sinal correto
         const movRef=db.collection('estoque_movimentos').doc();
         movBatch.set(movRef,{
-          ingrediente:nome,tipo:'saida_batida',qtd:kg,
+          ingrediente:nome,
+          tipo:diff>0?'saida_batida':'estorno_batida',
+          qtd:Math.abs(diff),
           data:FS.Timestamp.fromDate(new Date(r.data+'T12:00:00')),
-          responsavel:S.resp,ref:`Ração ${r.data} · ${totalBat} batidas`,
+          responsavel:S.resp,
+          ref:`Ração ${r.data} · ${totalBat} batidas`,
           timestamp:FS.FieldValue.serverTimestamp(),
         });
       });
       await Promise.all(promises);
       await movBatch.commit();
-      // Invalida cache do estoque para recarregar na próxima visita
       S.estoque.carregado=false;
     }
 
-    const descMsg=Object.keys(descontos).length?` · estoque de ${Object.keys(descontos).length} ingrediente(s) atualizado`:'';
-    toast(`✓ Ração registrada! ${totalBat} batidas · ${totalKg.toLocaleString('pt-BR')} kg${descMsg}`);
+    const nIngs=Object.keys(descontosNovos).length;
+    const isCorr=r.override;
+    toast(`✓ Ração ${isCorr?'corrigida':'registrada'}! ${totalBat} batidas · ${totalKg.toLocaleString('pt-BR')} kg${nIngs?` · ${nIngs} ingrediente(s) atualizados`:''}`);
     S.racao={data:ONTEM,batidas:{},qtd:{},jaLancado:null,override:false};
     render();
   }catch(e){toast('Erro: '+e.message,false);}
@@ -1616,8 +1648,8 @@ function tEstoque(){
             return`<tr style="border-top:1px solid var(--border)">
               <td style="padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--muted)">${dt.toLocaleDateString('pt-BR')}</td>
               <td style="padding:6px 10px;font-weight:500">${m.ingrediente}</td>
-              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':'#FEE2E2'};color:${isEntrada?'#065F46':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':'#FCA5A5'}">${isEntrada?'entrada':'saída batida'}</span></td>
-              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':'#DC2626'}">${isEntrada?'+':'−'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
+              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':m.tipo==='estorno_batida'?'#EFF6FF':'#FEE2E2'};color:${isEntrada?'#065F46':m.tipo==='estorno_batida'?'#1E40AF':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':m.tipo==='estorno_batida'?'#BFDBFE':'#FCA5A5'}">${isEntrada?'entrada':m.tipo==='estorno_batida'?'estorno':'saída batida'}</span></td>
+              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':m.tipo==='estorno_batida'?'#1E40AF':'#DC2626'}">${isEntrada?'+':m.tipo==='estorno_batida'?'+':'-'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
               <td style="padding:6px 10px;font-size:11px;color:var(--muted)">${m.ref||'—'}</td>
               <td style="padding:6px 10px;text-align:center">
                 ${isEntrada?`<div style="display:flex;gap:4px;justify-content:center">
