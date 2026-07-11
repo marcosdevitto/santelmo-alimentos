@@ -122,7 +122,34 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 .legend-line{width:18px;height:2px;flex-shrink:0;border-radius:2px}
 .footer{text-align:center;padding:20px;font-size:11px;color:var(--muted);font-family:var(--mono)}
 
-/* ── IMPRESSÃO / PDF ──────────────────────────────────────────────────────── */
+/* ── PAINEL RELATÓRIO DE PESAGEM ─────────────────────────────────────────── */
+.peso-rel-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-start;justify-content:flex-end}
+.peso-rel-panel{background:var(--card);width:min(560px,100vw);height:100vh;overflow-y:auto;box-shadow:-4px 0 24px rgba(0,0,0,.2);display:flex;flex-direction:column}
+.peso-rel-hd{background:var(--verde);padding:14px 18px;flex-shrink:0;position:sticky;top:0;z-index:10}
+.peso-rel-title{font-size:16px;font-weight:500;color:white;font-family:var(--serif)}
+.peso-rel-sub{font-size:11px;color:rgba(255,255,255,.65);margin-top:3px;font-family:var(--mono)}
+.btn-ver-rel{padding:4px 11px;border:1px solid var(--border);border-radius:20px;font-size:11px;cursor:pointer;background:var(--card);color:var(--muted);font-family:var(--sans);display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap}
+.btn-ver-rel:hover{border-color:var(--verde);color:var(--verde);background:var(--verde-light)}
+.pr-lista-item{display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.pr-lista-item:hover{background:var(--bg)}
+.pr-lista-item:last-child{border-bottom:none}
+.pr-nav{display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:62px;z-index:9}
+.pr-bloco{margin:12px 18px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pr-bloco-hd{padding:9px 13px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.pr-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
+.pr-stat{padding:8px 10px;background:var(--card);text-align:center}
+.pr-stat-v{font-size:15px;font-weight:500;font-family:var(--mono)}
+.pr-stat-l{font-size:9px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
+.pr-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.pr-tbl thead tr{background:var(--bg)}
+.pr-tbl th{padding:5px 10px;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--border);text-align:left}
+.pr-tbl th.r{text-align:right}
+.pr-tbl td{padding:4px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.pr-tbl td.r{text-align:right;font-family:var(--mono)}
+.pr-tbl tr:last-child td{border-bottom:none}
+.pr-leg{display:flex;gap:10px;padding:6px 13px;border-top:1px solid var(--border);background:var(--bg);font-size:10px;color:var(--muted)}
+@media print{.peso-rel-overlay{display:none!important}}
+
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   body{background:#F4F7F5!important;margin:0;padding:0}
@@ -244,7 +271,21 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
 
 <div id="main-app" style="display:none">
 
-<!-- PAINEL DE RELATÓRIO DIÁRIO -->
+<!-- PAINEL RELATÓRIO DE PESAGEM -->
+<div class="peso-rel-overlay" id="peso-rel-overlay" style="display:none" onclick="if(event.target===this)fecharRelPeso()">
+  <div class="peso-rel-panel">
+    <div class="peso-rel-hd">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <div class="peso-rel-title" id="pr-title">Relatório de pesagens</div>
+          <div class="peso-rel-sub" id="pr-sub">—</div>
+        </div>
+        <button class="btn-fechar" onclick="fecharRelPeso()">✕ Fechar</button>
+      </div>
+    </div>
+    <div id="pr-body"></div>
+  </div>
+</div>
 <div class="rel-overlay" id="rel-overlay" style="display:none" onclick="if(event.target===this)fecharRelatorio()">
   <div class="rel-panel">
     <div class="rel-header">
@@ -587,6 +628,10 @@ function renderPesoCurves(pesoDados){
           <div class="peso-title" style="color:${cor}">${meta?.nome||id}</div>
           <div style="font-size:11px;color:var(--muted);margin-left:3px">· ${gen} · sem ${semAtual}</div>
           <div class="peso-meta">últimas 10 coletas</div>
+          <button class="btn-ver-rel" onclick="abrirRelPeso('${id}')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Ver relatório
+          </button>
         </div>
         <div class="peso-chart"><canvas id="pc_${id}"></canvas></div>
         <div class="peso-leg">
@@ -1427,6 +1472,163 @@ function exportarPDF(){
     // Restaura o título após a caixa de diálogo de impressão
     setTimeout(()=>{document.title=tituloOriginal;},1000);
   });
+}
+
+// ── RELATÓRIO DE PESAGEM POR LOTE ────────────────────────────────────────────
+let _relPesoLoteId=null;
+let _relPesoDocs=[];
+let _relPesoVistaData=null;
+
+async function abrirRelPeso(loteId){
+  _relPesoLoteId=loteId;
+  _relPesoVistaData=null;
+  const meta=META[loteId];
+  document.getElementById('pr-title').textContent=`Relatório — ${meta?.nome||loteId}`;
+  document.getElementById('pr-sub').textContent=`${meta?.gen||''} · pesagens por coleta`;
+  document.getElementById('pr-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)"><div class="spinner"></div></div>';
+  document.getElementById('peso-rel-overlay').style.display='flex';
+  document.body.style.overflow='hidden';
+  try{
+    const snap=await db.collection('peso')
+      .where('lote','==',loteId)
+      .orderBy(firebase.firestore.FieldPath.documentId(),'desc')
+      .limit(100).get();
+    _relPesoDocs=snap.docs.map(d=>({id:d.id,...d.data(),dataObj:toDate(d.data().data)||new Date(d.id.split('_')[0]+'T12:00:00')}));
+    renderRelPesoLista();
+  }catch(e){document.getElementById('pr-body').innerHTML=`<div style="padding:20px;color:red">Erro: ${e.message}</div>`;}
+}
+
+function fecharRelPeso(){
+  document.getElementById('peso-rel-overlay').style.display='none';
+  document.body.style.overflow='';
+}
+
+function renderRelPesoLista(){
+  // Agrupa por data
+  const porData={};
+  _relPesoDocs.forEach(rec=>{
+    const key=rec.dataObj.toISOString().split('T')[0];
+    if(!porData[key])porData[key]={data:rec.dataObj,key,aves:null,ovos:null};
+    if(rec.tipo==='ave')porData[key].aves=rec;
+    else porData[key].ovos=rec;
+  });
+  const datas=Object.values(porData).sort((a,b)=>b.data-a.data);
+  const hojeN=new Date();
+
+  let html=`<div style="padding:10px 18px;font-size:11px;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border)">Selecione uma coleta para ver o relatório grama a grama</div>`;
+  if(!datas.length){html+='<div style="padding:30px;text-align:center;color:var(--muted);font-style:italic">Nenhuma pesagem registrada.</div>';}
+  else{
+    datas.forEach(d=>{
+      const diff=Math.floor((hojeN-d.data)/(24*60*60*1000));
+      const ago=diff===0?'hoje':diff===1?'ontem':`${diff}d atrás`;
+      const sem=d.aves?.semanas||d.ovos?.semanas||'—';
+      const nAve=(d.aves?.medicoes||[]).length;
+      const nOvo=(d.ovos?.medicoes||[]).length;
+      html+=`<div class="pr-lista-item" onclick="renderRelPesoData('${d.key}')">
+        <div>
+          <div style="font-size:14px;font-weight:500">${d.data.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono)">${ago} · sem ${sem}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${nAve>0?`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0">ave · ${nAve}</span>`:''}
+          ${nOvo>0?`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#FFFBEB;color:#b45309;border:1px solid #FDE68A">ovo · ${nOvo}</span>`:''}
+          <span style="color:var(--muted);font-size:16px">›</span>
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById('pr-body').innerHTML=html;
+}
+
+function renderRelPesoData(dataKey){
+  const hojeN=new Date();
+  const porData={};
+  _relPesoDocs.forEach(rec=>{
+    const key=rec.dataObj.toISOString().split('T')[0];
+    if(!porData[key])porData[key]={data:rec.dataObj,key,aves:null,ovos:null};
+    if(rec.tipo==='ave')porData[key].aves=rec;else porData[key].ovos=rec;
+  });
+  const d=porData[dataKey];if(!d)return;
+  const meta=META[_relPesoLoteId];
+  const diff=Math.floor((hojeN-d.data)/(24*60*60*1000));
+  const ago=diff===0?'hoje':diff===1?'ontem':`${diff}d atrás`;
+
+  function buildBloco(rec,tipo){
+    if(!rec)return'';
+    const gen=rec.gen||meta?.gen||'';
+    const sem=rec.semanas||0;
+    const isOvo=tipo==='ovo';
+    const cor=isOvo?'#b45309':CORES[_relPesoLoteId]||'#1B4D35';
+    const meds=(rec.medicoes||[]).map(m=>parseFloat(m.val??m)).filter(v=>!isNaN(v)&&v>0).sort((a,b)=>a-b);
+    if(!meds.length)return'';
+    const total=meds.length;
+    const media=meds.reduce((s,v)=>s+v,0)/total;
+    const minV=meds[0],maxV=meds[total-1];
+    const ideal=getIdealPeso(gen,sem,tipo);
+    const acimaCont=ideal?meds.filter(v=>v>=(ideal.min||0)).length:0;
+    const freq={};meds.forEach(v=>{const k=v.toFixed(1);freq[k]=(freq[k]||0)+1;});
+    const maxFreq=Math.max(...Object.values(freq));
+    const corSt={abaixo:'#DC2626',ideal:'#059669',acima:'#3B82F6',neutro:'var(--muted)'};
+    const bgSt={abaixo:'#FEE2E2',ideal:'#ECFDF5',acima:'#EFF6FF',neutro:'var(--card)'};
+    function getSt(v){
+      if(!ideal)return'neutro';
+      if(ideal.max&&v>ideal.max)return'acima';
+      if(v<(ideal.min||0))return'abaixo';
+      return'ideal';
+    }
+    const idealTxt=ideal?(ideal.max?`${ideal.min}–${ideal.max}g`:`≥${ideal.min}g`):'sem ideal';
+    return`<div class="pr-bloco">
+      <div class="pr-bloco-hd">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:${cor}">${isOvo?'Peso dos ovos':'Peso das aves'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">${total} amostras · ${idealTxt}</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:15px;font-weight:500">${media.toFixed(1)}g</div>
+      </div>
+      <div class="pr-stats">
+        ${[{v:media.toFixed(1)+'g',l:'Média'},{v:minV.toFixed(1)+'g',l:'Mínimo'},{v:maxV.toFixed(1)+'g',l:'Máximo'},{v:ideal?`${acimaCont}/${total}`:'—',l:'≥ ideal',c:!ideal?'var(--ink)':acimaCont===total?'#059669':'#DC2626'}]
+          .map(s=>`<div class="pr-stat"><div class="pr-stat-v" style="color:${s.c||'var(--ink)'}">${s.v}</div><div class="pr-stat-l">${s.l}</div></div>`).join('')}
+      </div>
+      <table class="pr-tbl">
+        <thead><tr>
+          <th>Peso (g)</th><th class="r">Qtd</th><th class="r">%</th>
+          <th>Ocorrência</th><th class="r">Status</th>
+        </tr></thead>
+        <tbody>
+          ${Object.entries(freq).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0])).map(([peso,cnt])=>{
+            const st=getSt(parseFloat(peso));
+            const pct=Math.round(cnt/total*100);
+            return`<tr style="background:${bgSt[st]};border-bottom:1px solid var(--border)">
+              <td style="font-family:var(--mono);font-weight:500;color:${corSt[st]};padding:4px 10px">${peso}</td>
+              <td class="r" style="padding:4px 10px">${cnt}</td>
+              <td class="r" style="padding:4px 10px;color:var(--muted)">${pct}%</td>
+              <td style="padding:4px 10px"><div style="background:rgba(0,0,0,.06);border-radius:3px;height:5px;overflow:hidden;width:80px"><div style="height:100%;width:${Math.round(cnt/maxFreq*100)}%;background:${corSt[st]};border-radius:3px"></div></div></td>
+              <td class="r" style="padding:4px 10px;font-size:10px;color:${corSt[st]}">${st==='neutro'?'—':st}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div class="pr-leg">
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#DC2626"></div>abaixo</div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#059669"></div>ideal</div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#3B82F6"></div>acima</div>
+      </div>
+    </div>`;
+  }
+
+  const html=`
+    <div class="pr-nav">
+      <button onclick="renderRelPesoLista()" style="padding:4px 11px;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;background:var(--bg);color:var(--muted);font-family:var(--sans)">← Voltar</button>
+      <div>
+        <div style="font-size:13px;font-weight:500">${d.data.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})}</div>
+        <div style="font-size:11px;color:var(--muted)">${ago} · sem ${d.aves?.semanas||d.ovos?.semanas||'—'}</div>
+      </div>
+    </div>
+    ${buildBloco(d.ovos,'ovo')}
+    ${buildBloco(d.aves,'ave')}
+    <div style="height:20px"></div>`;
+
+  document.getElementById('pr-body').innerHTML=html;
 }
 
 // ── RELATÓRIO DIÁRIO ──────────────────────────────────────────────────────────
