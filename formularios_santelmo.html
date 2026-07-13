@@ -291,7 +291,7 @@ const GALPOES = [
   {id:'galpao_galinhas_soltas',label:'Galinhas Soltas'},
   {id:'galpao_recria',        label:'Galpão Recria'},
 ];
-const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas','Fórmulas','Estoque'];
+const TABS_NAMES = ['Produtividade','Entreposto','Ração','Mortalidade','Peso','Config. Lotes','Curvas','Fórmulas','Estoque','Rel. Peso'];
 
 // Fases de ração — definição global
 const FASES_RACAO = [
@@ -334,6 +334,8 @@ let S = {
   peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
   // estoque
   estoque: {itens:[], movimentos:[], novaEntrada:{ingrediente:'',qtd:'',data:HOJE}, carregado:false, editandoMov:null},
+  // relatório de peso
+  relPeso: {docs:[], carregado:false, dataAberta:null},
   formulas: {}, // {faseId: {padrao:{ings:[]}, variacoes:[{nome,lotes:[],ings:[]}]}}
   formulaEdit: {faseId:null, varIdx:'padrao', ings:[]},
   // config lotes
@@ -414,6 +416,7 @@ async function ST(i){
   if(i===0){ S.jaLancado.prod=await verificar('produtividade',S.pd); }
   if(i===7){ await carregarFormulas(); }
   if(i===8){ await carregarEstoque(); }
+  if(i===9){ await carregarRelPeso(); }
   if(i===5){ await carregarFormulas(); } // Config. Lotes precisa das fórmulas para mostrar variações
   render();
 }
@@ -423,7 +426,7 @@ function render(){
   if(!S.ready)return;
   const activeId   = document.activeElement?.id;
   const selStart   = document.activeElement?.selectionStart;
-  const map=[t0,t1,t2,t3,tPeso,t4,t5,tFormulas,tEstoque];
+  const map=[t0,t1,t2,t3,tPeso,t4,t5,tFormulas,tEstoque,tRelPeso];
   document.getElementById('content').innerHTML=map[S.tab]?.()??'';
   if(activeId){const el=document.getElementById(activeId);if(el){el.focus();try{if(selStart!==undefined&&el.setSelectionRange)el.setSelectionRange(selStart,selStart);}catch(e){}}}
 }
@@ -619,8 +622,12 @@ function t2(){
           <span>Total</span><span>${totBat} batidas</span><span>${totKg.toLocaleString('pt-BR')} kg</span>
         </div>
       </div>
-      <button style="padding:7px 18px;border:1.5px solid var(--amber);color:var(--amber);background:var(--amber-light);border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
-        onclick="corrigirRacao()">⚠ Corrigir lançamento</button>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button style="padding:7px 18px;border:1.5px solid var(--amber);color:var(--amber);background:var(--amber-light);border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
+          onclick="corrigirRacao()">⚠ Corrigir lançamento</button>
+        <button style="padding:7px 18px;border:1.5px solid #DC2626;color:#DC2626;background:#FEE2E2;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"
+          onclick="excluirRacao()">🗑 Excluir lançamento</button>
+      </div>
     </div>`;
   } else {
     if(r.override){
@@ -666,6 +673,68 @@ function t2(){
     html+=`<button class="btn-sub" onclick="subRacao()">Registrar ração — ${totalKg>0?totalKg.toLocaleString('pt-BR')+' kg total':'adicione batidas nos lotes'}</button>`;
   }
   return html;
+}
+
+async function excluirRacao(){
+  const r=S.racao;
+  const doc=r.jaLancado;
+  if(!doc)return;
+  const data=r.data;
+  const totalBat=doc.total_batidas||0;
+  const totalKg=doc.total_kg||0;
+  if(!confirm(`Excluir o lançamento de ração de ${new Date(data+'T12:00:00').toLocaleDateString('pt-BR')}?\n\n${totalBat} batidas · ${totalKg.toLocaleString('pt-BR')} kg\n\nOs descontos do estoque serão estornados.`))return;
+
+  try{
+    // Calcula descontos antigos para estornar
+    const descontosAntigos={};
+    for(const [loteId,v] of Object.entries(doc.lotes||{})){
+      const lote=S.lotes.find(l=>l.id===loteId);if(!lote)continue;
+      const bat=v.batidas||0;const ratioKg=(v.qtd_por_batida||1000)/1000;
+      const faseId=lote.formula_fase||getFaseAtual(semanas(lote.chegada))?.id;
+      if(!faseId)continue;
+      if(!S.formulas[faseId]){
+        try{const d=await db.collection('formulas_racao').doc(faseId).get();if(d.exists)S.formulas[faseId]=d.data();}catch(e){}
+      }
+      const fm=S.formulas[faseId];if(!fm)continue;
+      const varNome=lote.formula_variacao;
+      let ings=fm.padrao?.ings||[];
+      if(varNome&&varNome!=='padrao'){
+        const varObj=fm.variacoes?.find(v=>v.nome===varNome&&v.lotes?.includes(loteId));
+        if(varObj)ings=varObj.ings||[];
+      }
+      ings.filter(i=>i.ctrl).forEach(i=>{
+        const kg=Math.round((i.kg||0)*ratioKg*bat*10)/10;
+        descontosAntigos[i.nome]=(descontosAntigos[i.nome]||0)+kg;
+      });
+    }
+
+    // 1. Remove movimentações de estoque desta data
+    const movsSnap=await db.collection('estoque_movimentos')
+      .where('ref','==',`Ração ${data} · ${totalBat} batidas`).get();
+    const delBatch=db.batch();
+    movsSnap.docs.forEach(d=>delBatch.delete(d.ref));
+    if(movsSnap.docs.length)await delBatch.commit();
+
+    // 2. Estorna saldo de cada ingrediente
+    if(Object.keys(descontosAntigos).length){
+      await Promise.all(Object.entries(descontosAntigos).map(async([nome,kg])=>{
+        const itemRef=db.collection('estoque_itens').doc(nome.toLowerCase().replace(/\s+/g,'_'));
+        const snap=await itemRef.get();
+        if(snap.exists){
+          const atual=snap.data().qtd_atual||0;
+          await itemRef.update({qtd_atual:atual+kg,ultima_atualizacao:FS.FieldValue.serverTimestamp()});
+        }
+      }));
+      S.estoque.carregado=false;
+    }
+
+    // 3. Apaga o documento de ração
+    await db.collection('racao').doc(data).delete();
+
+    toast(`✓ Lançamento excluído — ${Object.keys(descontosAntigos).length>0?'estoque estornado':'sem descontos registrados'}`);
+    S.racao={data:ONTEM,batidas:{},qtd:{},jaLancado:null,override:false};
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
 }
 
 async function corrigirRacao(){
@@ -1292,6 +1361,141 @@ function abrirCorrecaoFase(loteId){
   }).join('');
 
   modal.style.display='flex';
+}
+
+// ── TAB RELATÓRIO DE PESO ─────────────────────────────────────────────────────
+async function carregarRelPeso(){
+  if(S.relPeso.carregado)return;
+  try{
+    const snap=await db.collection('peso').orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(200).get();
+    S.relPeso.docs=snap.docs.map(d=>({id:d.id,...d.data(),dataObj:toDate(d.data().data)||new Date(d.id.split('_')[0]+'T12:00:00')}));
+    S.relPeso.carregado=true;render();
+  }catch(e){toast('Erro ao carregar pesagens: '+e.message,false);}
+}
+
+function getIdealRelPeso(gen,sem,tipo){
+  const cp=S.curvas?.[gen];if(!cp)return null;
+  if(tipo==='ave'){
+    if(sem<=18){const ks=Object.keys(cp.ave_recria||{}).map(Number).filter(k=>k<=sem);if(!ks.length)return null;const v=cp.ave_recria[Math.max(...ks)];return{min:v.min,max:v.max||null};}
+    const ks=Object.keys(cp.ave_prod||{}).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return{min:cp.ave_prod[Math.max(...ks)],max:null};
+  }
+  const ks=Object.keys(cp.ovo||{}).map(Number).filter(k=>k<=sem);if(!ks.length)return null;return{min:cp.ovo[Math.max(...ks)],max:null};
+}
+
+function tRelPeso(){
+  const R=S.relPeso;
+  if(!R.carregado)return`<div style="text-align:center;padding:40px;color:var(--muted)"><div class="spinner"></div></div>`;
+  if(!R.docs.length)return`<div class="ibox">Nenhuma pesagem registrada ainda.</div>`;
+
+  const porData={};
+  R.docs.forEach(rec=>{
+    const key=rec.dataObj.toISOString().split('T')[0];
+    if(!porData[key])porData[key]={data:rec.dataObj,key,lotes:new Set(),aves:0,ovos:0,recs:[]};
+    porData[key].lotes.add(rec.lote);
+    if(rec.tipo==='ave')porData[key].aves++;else porData[key].ovos++;
+    porData[key].recs.push(rec);
+  });
+  const datas=Object.values(porData).sort((a,b)=>b.data-a.data);
+
+  // Vista interna de uma data
+  if(R.dataAberta){
+    const d=porData[R.dataAberta];if(!d)return'';
+    const recsDia=d.recs.sort((a,b)=>{
+      if(a.tipo!==b.tipo)return a.tipo==='ovo'?-1:1;
+      return(a.lote_nome||a.lote).localeCompare(b.lote_nome||b.lote,undefined,{numeric:true});
+    });
+    let html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button onclick="S.relPeso.dataAberta=null;render()" style="padding:5px 12px;border:1px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;background:var(--bg);color:var(--muted);font-family:inherit">← Voltar</button>
+      <div>
+        <div style="font-size:16px;font-weight:500">${d.data.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'})}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${[...d.lotes].length} lote(s) · ${d.aves} coleta(s) ave · ${d.ovos} coleta(s) ovo</div>
+      </div>
+    </div>`;
+    recsDia.forEach(rec=>{
+      const lote=S.lotes.find(l=>l.id===rec.lote);
+      const gen=rec.gen||lote?.gen||'';
+      const sem=rec.semanas||0;
+      const isOvo=rec.tipo==='ovo';
+      const corTipo=isOvo?'#b45309':'#1B4D35';
+      const medicoes=(rec.medicoes||[]).map(m=>parseFloat(m.val??m)).filter(v=>!isNaN(v)&&v>0).sort((a,b)=>a-b);
+      if(!medicoes.length)return;
+      const total=medicoes.length;
+      const media=medicoes.reduce((s,v)=>s+v,0)/total;
+      const minV=medicoes[0],maxV=medicoes[total-1];
+      const ideal=getIdealRelPeso(gen,sem,rec.tipo);
+      const acimaCont=ideal?medicoes.filter(v=>v>=ideal.min).length:0;
+      const freq={};
+      medicoes.forEach(v=>{const k=v.toFixed(1);freq[k]=(freq[k]||0)+1;});
+      const maxFreq=Math.max(...Object.values(freq));
+      const corSt={abaixo:'#DC2626',ideal:'#059669',acima:'#3B82F6',neutro:'var(--muted)'};
+      const bgSt={abaixo:'#FEE2E2',ideal:'#ECFDF5',acima:'#EFF6FF',neutro:'var(--card)'};
+      function getSt(v){if(!ideal)return'neutro';if(ideal.max&&v>ideal.max)return'acima';if(v<ideal.min)return'abaixo';return'ideal';}
+
+      html+=`<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px">
+        <div style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:500;color:${corTipo}">${rec.lote_nome||rec.lote} — ${isOvo?'Peso dos ovos':'Peso das aves'}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:1px">${gen} · sem ${sem} · ${total} amostras${ideal?` · ideal ${ideal.max?`${ideal.min}–${ideal.max}g`:`≥${ideal.min}g`}`:''}</div>
+          </div>
+          <div style="font-family:var(--mono);font-size:17px;font-weight:500">${media.toFixed(1)}g</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">
+          ${[{v:media.toFixed(1)+'g',l:'Média'},{v:minV.toFixed(1)+'g',l:'Mínimo'},{v:maxV.toFixed(1)+'g',l:'Máximo'},{v:ideal?`${acimaCont}/${total}`:'—',l:'≥ ideal',c:!ideal?'var(--ink)':acimaCont===total?'#059669':'#DC2626'}]
+            .map(s=>`<div style="padding:9px 12px;background:var(--card);text-align:center"><div style="font-size:16px;font-weight:500;font-family:var(--mono);color:${s.c||'var(--ink)'}">${s.v}</div><div style="font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.05em">${s.l}</div></div>`).join('')}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:var(--bg);border-bottom:1px solid var(--border)">
+            <th style="padding:5px 12px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Peso (g)</th>
+            <th style="padding:5px 12px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right">Qtd</th>
+            <th style="padding:5px 12px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right">%</th>
+            <th style="padding:5px 12px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Ocorrência</th>
+            <th style="padding:5px 12px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right">Status</th>
+          </tr></thead>
+          <tbody>${Object.entries(freq).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0])).map(([peso,cnt])=>{
+            const st=getSt(parseFloat(peso));
+            const pct=Math.round(cnt/total*100);
+            return`<tr style="background:${bgSt[st]};border-bottom:1px solid var(--border)">
+              <td style="padding:5px 12px;font-family:var(--mono);font-weight:500;color:${corSt[st]}">${peso}</td>
+              <td style="padding:5px 12px;text-align:right;font-family:var(--mono)">${cnt}</td>
+              <td style="padding:5px 12px;text-align:right;font-family:var(--mono);color:var(--muted)">${pct}%</td>
+              <td style="padding:5px 12px"><div style="background:rgba(0,0,0,.06);border-radius:3px;height:6px;overflow:hidden;width:100px"><div style="height:100%;width:${Math.round(cnt/maxFreq*100)}%;background:${corSt[st]};border-radius:3px"></div></div></td>
+              <td style="padding:5px 12px;text-align:right;font-size:11px;color:${corSt[st]}">${st==='neutro'?'—':st}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+        <div style="display:flex;gap:12px;padding:7px 14px;border-top:1px solid var(--border);background:var(--bg);font-size:11px;color:var(--muted)">
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#DC2626"></div>abaixo</div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#059669"></div>ideal</div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#3B82F6"></div>acima</div>
+        </div>
+      </div>`;
+    });
+    return html;
+  }
+
+  // Lista de datas
+  const hojeD=new Date();
+  let html=`<div class="stitle">Coletas de pesagem</div><div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">`;
+  datas.forEach((d,i)=>{
+    const diff=Math.floor((hojeD-d.data)/(24*60*60*1000));
+    const ago=diff===0?'hoje':diff===1?'ontem':`${diff}d atrás`;
+    html+=`<div onclick="S.relPeso.dataAberta='${d.key}';render()"
+      style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:${i<datas.length-1?'1px solid var(--border)':'none'};cursor:pointer;transition:background .1s"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <div>
+        <div style="font-size:14px;font-weight:500">${d.data.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono)">${ago}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${[...d.lotes].map(id=>{const l=S.lotes.find(l=>l.id===id);return`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--muted)">${l?.nome||id}</span>`;}).join('')}
+        ${d.aves>0?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0">${d.aves}× ave</span>`:''}
+        ${d.ovos>0?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#FFFBEB;color:#b45309;border:1px solid #FDE68A">${d.ovos}× ovo</span>`:''}
+        <span style="color:var(--muted);font-size:16px">›</span>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  return html;
 }
 
 function fecharCorrecaoFase(){
