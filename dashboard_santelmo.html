@@ -769,8 +769,10 @@ function renderEstoque(itens,formulas){
   LOTES.filter(id=>META[id]?.ativo!==false).forEach(id=>{
     const meta=META[id];
     if(!meta?.chegada)return;
-    const sem=semanas(meta.chegada);
-    const faseId=meta.formula_fase||getFaseAtual(sem)?.id;
+    const fds=meta?.formula_datas||{};
+    const hojeF=new Date();hojeF.setHours(0,0,0,0);
+    let faseId=null;
+    FASES_RACAO.forEach(f=>{const dt=fds[f.id];if(dt&&new Date(dt+'T00:00:00')<=hojeF)faseId=f.id;});
     if(!faseId||!formulas[faseId])return;
     const fm=formulas[faseId];
     const varNome=meta.formula_variacao;
@@ -847,47 +849,45 @@ function renderTrocaFormula(){
   if(!lotesAtivos.length){el.innerHTML='<div class="empty">Nenhum lote ativo.</div>';return;}
 
   const alertas=[],emDia=[];
+  const hojeN=new Date();hojeN.setHours(0,0,0,0);
+
   lotesAtivos.forEach(id=>{
-    const meta=META[id];const sem=semanas(meta.chegada);
-    const faseAtualId=meta.formula_fase||getFaseAtual(sem)?.id;
-    const faseTeorId=getFaseAtual(sem)?.id;
+    const meta=META[id];
+    const fds=meta?.formula_datas||{};
+    let faseAtualId=null,proxFaseId=null,proxData=null;
+    FASES_RACAO.forEach(f=>{
+      const dt=fds[f.id];if(!dt)return;
+      const d=new Date(dt+'T00:00:00');
+      if(d<=hojeN)faseAtualId=f.id;
+      else if(!proxData||d<new Date(proxData+'T00:00:00')){proxFaseId=f.id;proxData=dt;}
+    });
+    if(!faseAtualId&&!proxFaseId)return;
     const faseAtualObj=FASES_RACAO.find(f=>f.id===faseAtualId);
-    const faseTeorObj=FASES_RACAO.find(f=>f.id===faseTeorId);
-    const proxFase=faseAtualObj?getProximaFase(faseAtualObj.id):null;
-    const semsParaTroca=proxFase?proxFase.semIni-sem:null;
-    const faseAtualIdx=FASES_RACAO.findIndex(f=>f.id===faseAtualId);
-    const faseTeorIdx=FASES_RACAO.findIndex(f=>f.id===faseTeorId);
-    const atrasada=faseAtualId&&faseTeorId&&faseAtualIdx<faseTeorIdx; // só atrasada se fase manual for ANTERIOR à teórica
-    const adiantado=faseAtualId&&faseTeorId&&faseAtualIdx>faseTeorIdx;
-    const item={id,nome:meta.nome,gen:meta.gen,sem,faseAtualObj,faseTeorObj,proxFase,semsParaTroca,atrasada,adiantado};
-    if(atrasada||(semsParaTroca!==null&&semsParaTroca<=3&&semsParaTroca>=0&&!adiantado))alertas.push(item);
+    const proxFaseObj=FASES_RACAO.find(f=>f.id===proxFaseId);
+    const dias=proxData?Math.ceil((new Date(proxData+'T00:00:00')-hojeN)/(24*60*60*1000)):null;
+    const item={id,nome:meta.nome,gen:meta.gen,faseAtualObj,proxFaseObj,proxData,dias};
+    if(dias!==null&&dias<=7)alertas.push(item);
     else emDia.push(item);
   });
 
   let html=alertas.map(item=>{
-    const cor=item.atrasada?'#DC2626':'#D97706';
-    const bg=item.atrasada?'#FEE2E2':'#FFFBEB';
-    const bord=item.atrasada?'#FCA5A5':'#FDE68A';
-    // Calcula data prevista de troca
-    let dataPrevisao='';
-    if(!item.atrasada&&item.proxFase&&item.semsParaTroca!==null){
-      const dt=new Date(hoje);dt.setDate(dt.getDate()+item.semsParaTroca*7);
-      dataPrevisao=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
-    } else if(item.atrasada){
-      dataPrevisao='já deveria ter trocado';
-    }
+    const urgente=item.dias!==null&&item.dias<=0;
+    const cor=urgente?'#DC2626':'#D97706';
+    const bg=urgente?'#FEE2E2':'#FFFBEB';
+    const bord=urgente?'#FCA5A5':'#FDE68A';
+    const dtFmt=item.proxData?new Date(item.proxData+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
     return`<div style="border:1px solid ${bord};border-radius:9px;padding:10px 13px;background:${bg};margin-bottom:8px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:7px">
-        <div><div style="font-size:13px;font-weight:500">${item.nome}</div><div style="font-size:11px;color:var(--muted)">${item.gen} · sem ${item.sem}</div></div>
+        <div><div style="font-size:13px;font-weight:500">${item.nome}</div><div style="font-size:11px;color:var(--muted)">${item.gen}</div></div>
         <div style="text-align:right">
-          <span style="font-size:11px;font-weight:600;color:${cor}">${item.atrasada?'⚠ atrasada':'troca em '+item.semsParaTroca+' sem'}</span>
-          ${dataPrevisao?`<div style="font-size:10px;color:${cor};margin-top:2px">📅 ${dataPrevisao}</div>`:''}
+          <span style="font-size:11px;font-weight:600;color:${cor}">${urgente?'🔴 hoje ou vencida':`⚠ em ${item.dias} dia${item.dias>1?'s':''}`}</span>
+          ${dtFmt?`<div style="font-size:10px;color:${cor};margin-top:2px">📅 ${dtFmt}</div>`:''}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:7px;font-size:12px">
         <span style="padding:3px 9px;border-radius:6px;background:white;color:#065F46;border:1px solid #A7F3D0">${item.faseAtualObj?.nome||'—'}</span>
         <span style="color:var(--muted)">→</span>
-        <span style="padding:3px 9px;border-radius:6px;background:white;color:#6D28D9;border:1px solid #DDD6FE">${item.proxFase?.nome||item.faseTeorObj?.nome||'—'}</span>
+        <span style="padding:3px 9px;border-radius:6px;background:white;color:#6D28D9;border:1px solid #DDD6FE">${item.proxFaseObj?.nome||'—'}</span>
       </div>
     </div>`;
   }).join('');
@@ -895,16 +895,12 @@ function renderTrocaFormula(){
   if(emDia.length){
     html+=`<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 0 6px;border-top:1px solid var(--border);margin-top:4px">Em dia</div>`;
     html+=emDia.map(item=>{
-      let dataPrevisao='';
-      if(item.proxFase&&item.semsParaTroca!==null){
-        const dt=new Date(hoje);dt.setDate(dt.getDate()+item.semsParaTroca*7);
-        dataPrevisao=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
-      }
+      const dtFmt=item.proxData?new Date(item.proxData+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
       return`<div style="border:1px solid var(--verde-border);border-radius:8px;padding:7px 12px;background:var(--verde-light);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
-        <div><span style="font-size:12px;font-weight:500">${item.nome}</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${item.faseAtualObj?.nome||'sem fase'} · sem ${item.sem}</span></div>
+        <div><span style="font-size:12px;font-weight:500">${item.nome}</span><span style="font-size:11px;color:var(--muted);margin-left:6px">${item.faseAtualObj?.nome||'sem fase'}</span></div>
         <div style="text-align:right">
-          <span style="font-size:11px;color:var(--muted)">${item.proxFase&&item.semsParaTroca!==null?`→ ${item.proxFase.nome} em ${item.semsParaTroca} sem`:'última fase'}</span>
-          ${dataPrevisao?`<div style="font-size:10px;color:var(--muted)">📅 ${dataPrevisao}</div>`:''}
+          <span style="font-size:11px;color:var(--muted)">${item.proxFaseObj?`→ ${item.proxFaseObj.nome}`:'última fase'}</span>
+          ${dtFmt?`<div style="font-size:10px;color:var(--muted)">📅 ${dtFmt}</div>`:''}
         </div>
       </div>`;
     }).join('');

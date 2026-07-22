@@ -312,6 +312,35 @@ function getProximaFase(faseId){
   return idx>=0&&idx<FASES_RACAO.length-1?FASES_RACAO[idx+1]:null;
 }
 
+// Nova lógica baseada em datas manuais
+function getFaseAtualPorData(lote){
+  if(!lote?.formula_datas)return null;
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  let faseAtual=null;
+  FASES_RACAO.forEach(f=>{
+    const dt=lote.formula_datas[f.id];
+    if(dt&&new Date(dt+'T00:00:00')<=hoje) faseAtual=f.id;
+  });
+  return faseAtual?FASES_RACAO.find(f=>f.id===faseAtual):null;
+}
+
+function getProximaTrocaPorData(lote){
+  if(!lote?.formula_datas)return null;
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  for(const f of FASES_RACAO){
+    const dt=lote.formula_datas[f.id];
+    if(dt&&new Date(dt+'T00:00:00')>hoje)return{fase:f,data:dt};
+  }
+  return null;
+}
+
+function diasParaTroca(lote){
+  const prox=getProximaTrocaPorData(lote);
+  if(!prox)return null;
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  return Math.ceil((new Date(prox.data+'T00:00:00')-hoje)/(24*60*60*1000));
+}
+
 // ── ESTADO ────────────────────────────────────────────────────────────────────
 let S = {
   tab: 0, ready: false, erro: null,
@@ -339,7 +368,7 @@ let S = {
   formulas: {}, // {faseId: {padrao:{ings:[]}, variacoes:[{nome,lotes:[],ings:[]}]}}
   formulaEdit: {faseId:null, varIdx:'padrao', ings:[]},
   // config lotes
-  showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:''},
+  showAdd: false, novoLote: {nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:'',formula_datas:{}},
   // curvas
   cg: '', showAddGen: false, ng: '',
 };
@@ -690,7 +719,7 @@ async function excluirRacao(){
     for(const [loteId,v] of Object.entries(doc.lotes||{})){
       const lote=S.lotes.find(l=>l.id===loteId);if(!lote)continue;
       const bat=v.batidas||0;const ratioKg=(v.qtd_por_batida||1000)/1000;
-      const faseId=lote.formula_fase||getFaseAtual(semanas(lote.chegada))?.id;
+      const faseId=lote.formula_fase||getFaseAtualPorData(lote)?.id||getFaseAtual(semanas(lote.chegada))?.id;
       if(!faseId)continue;
       if(!S.formulas[faseId]){
         try{const d=await db.collection('formulas_racao').doc(faseId).get();if(d.exists)S.formulas[faseId]=d.data();}catch(e){}
@@ -974,61 +1003,66 @@ function t4(){
                 style="padding:5px 12px;border:1px solid var(--verde-border);border-radius:6px;font-size:12px;background:var(--verde-light);color:var(--verde);cursor:pointer;white-space:nowrap">Salvar</button>
             </div>`}
         ${(()=>{
-          const sem=semanas(l.chegada);
-          const faseAtual=l.formula_fase||getFaseAtual(sem)?.id||null;
-          const faseObj=FASES_RACAO.find(f=>f.id===faseAtual);
-          const faseTeor=getFaseAtual(sem);
-          const proxFase=faseObj?getProximaFase(faseObj.id):null;
-          const semsParaTroca=proxFase?proxFase.semIni-sem:null;
-          const faseAtualIdx=FASES_RACAO.findIndex(f=>f.id===faseAtual);
-          const faseTeorIdx=FASES_RACAO.findIndex(f=>f.id===faseTeor?.id);
-          const atrasada=faseObj&&faseTeor&&faseAtualIdx<faseTeorIdx;
-          const adiantado=faseObj&&faseTeor&&faseAtualIdx>faseTeorIdx;
-          if(!faseObj)return'';
-
-          // Opções de fórmula disponíveis para a fase atual
-          const fm=S.formulas[faseAtual];
+          const faseAtualObj=getFaseAtualPorData(l);
+          const proxTroca=getProximaTrocaPorData(l);
+          const dias=diasParaTroca(l);
+          const fm=S.formulas[faseAtualObj?.id];
           const variacoes=fm?.variacoes||[];
           const varAtual=l.formula_variacao||'padrao';
-          const opcoes=[
-            {val:'padrao',label:'Padrão'},
-            ...variacoes.map(v=>({val:v.nome,label:v.nome}))
-          ];
+          const opcoes=[{val:'padrao',label:'Padrão'},...variacoes.map(v=>({val:v.nome,label:v.nome}))];
+          const temDatas=l.formula_datas&&Object.values(l.formula_datas).some(d=>d);
 
-          const selectorHtml=opcoes.length>1?`
+          // Seletor de variação
+          const selectorHtml=faseAtualObj&&opcoes.length>1?`
             <div style="margin-top:8px;padding:8px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
-              <div style="font-size:11px;font-weight:600;color:var(--verde);margin-bottom:6px">Fórmula em uso</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-                ${opcoes.map(o=>`<button onclick="selecionarFormula('${l.id}','${faseAtual}','${o.val}')"
-                  style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${varAtual===o.val?'var(--verde)':'var(--border)'};background:${varAtual===o.val?'var(--verde)':'var(--card)'};color:${varAtual===o.val?'white':'var(--muted)'}">
-                  ${varAtual===o.val?'✓ ':''}${o.label}
-                </button>`).join('')}
+              <div style="font-size:11px;font-weight:600;color:var(--verde);margin-bottom:6px">Fórmula em uso — ${faseAtualObj.nome}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${opcoes.map(o=>`<button onclick="selecionarFormula('${l.id}','${faseAtualObj.id}','${o.val}')"
+                  style="padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${varAtual===o.val?'var(--verde)':'var(--border)'};background:${varAtual===o.val?'var(--verde)':'var(--card)'};color:${varAtual===o.val?'white':'var(--muted)'}">
+                  ${varAtual===o.val?'✓ ':''}${o.label}</button>`).join('')}
               </div>
-              <div style="font-size:11px;color:var(--muted)">Fase: <strong>${faseObj.nome}</strong>${proxFase?` · próxima: ${proxFase.nome} (sem ${proxFase.semIni})`:''}</div>
-            </div>`:`
+            </div>`:faseAtualObj?`
             <div style="font-size:12px;color:var(--muted);margin-top:6px;padding:7px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
-              🌾 <strong style="color:var(--verde)">${faseObj.nome}</strong> — fórmula padrão
-              ${variacoes.length===0?`<span style="color:var(--muted)"> · sem variações cadastradas</span>`:''}
-              ${proxFase?`<span style="color:var(--muted)"> · próxima: ${proxFase.nome} (sem ${proxFase.semIni})</span>`:''}
-            </div>`;
+              🌾 <strong style="color:var(--verde)">${faseAtualObj.nome}</strong> — fórmula padrão
+            </div>`:'';
 
+          // Alerta de troca próxima
           let alertHtml='';
-          if(atrasada){
-            alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-              <span style="font-size:11px;color:#991B1B">🔴 Fase teórica já é <strong>${faseTeor?.nome}</strong> — troca não confirmada</span>
-              <button onclick="abrirConfirmacaoTroca('${l.id}')" style="padding:5px 12px;background:#DC2626;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar →</button>
-            </div>`;
-          } else if(adiantado){
-            alertHtml=`<div style="margin-top:6px;padding:7px 10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:7px;font-size:11px;color:#1E40AF">
-              ℹ️ Fase adiantada manualmente — fase teórica ainda é <strong>${faseTeor?.nome}</strong>
-            </div>`;
-          } else if(proxFase&&semsParaTroca<=3&&semsParaTroca>=0){
-            alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-              <span style="font-size:11px;color:#92400E">⚠ Troca para <strong>${proxFase.nome}</strong> em ~${semsParaTroca} sem</span>
-              <button onclick="abrirConfirmacaoTroca('${l.id}')" style="padding:5px 12px;background:#D97706;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar troca</button>
-            </div>`;
+          if(proxTroca&&dias!==null){
+            if(dias<=0){
+              alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span style="font-size:11px;color:#991B1B">🔴 Troca para <strong>${proxTroca.fase.nome}</strong> prevista para hoje ou anterior</span>
+              </div>`;
+            } else if(dias<=7){
+              alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;font-size:11px;color:#92400E">
+                ⚠ Troca para <strong>${proxTroca.fase.nome}</strong> em <strong>${dias} dia${dias>1?'s':''}</strong> · ${new Date(proxTroca.data+'T12:00:00').toLocaleDateString('pt-BR')}
+              </div>`;
+            }
           }
-          return`${selectorHtml}${alertHtml}`;
+
+          // Seção de datas de troca
+          const datasHtml=`<div style="margin-top:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Datas de troca</div>
+              <button onclick="toggleEditarDatas('${l.id}')" style="font-size:11px;padding:2px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit">✏ Editar</button>
+            </div>
+            ${FASES_RACAO.map(f=>{
+              const dt=l.formula_datas?.[f.id];
+              if(!dt)return'';
+              const dtObj=new Date(dt+'T00:00:00');
+              const hojeN=new Date();hojeN.setHours(0,0,0,0);
+              const isAtual=faseAtualObj?.id===f.id;
+              const isProx=proxTroca?.fase?.id===f.id;
+              const passou=dtObj<=hojeN;
+              return`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+                <span style="color:${isAtual?'var(--verde)':passou?'var(--muted)':'var(--ink)'}${isAtual?';font-weight:600':''}">${f.nome}</span>
+                <span style="font-family:var(--mono);font-size:11px;color:${isProx?'#D97706':isAtual?'var(--verde)':'var(--muted)'}">${dtObj.toLocaleDateString('pt-BR')}${isAtual?' ✓':''}</span>
+              </div>`;
+            }).filter(Boolean).join('')}
+            ${!temDatas?`<div style="font-size:11px;color:#D97706;padding:4px 0">⚠ Nenhuma data de troca informada</div>`:''}
+          </div>`;
+
+          return`${selectorHtml}${alertHtml}${datasHtml}`;
         })()}
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
           ${l.ativo?`<button class="btn-sm bd" onclick="encerrarLote('${l.id}')">Encerrar lote</button>`:`<button class="btn-sm bsec" onclick="reativarLote('${l.id}')">Reativar</button>`}
@@ -1061,6 +1095,14 @@ function t4(){
         <input type="number" min="0" placeholder="ex: 18000" value="${S.novoLote.aves_iniciais}" oninput="S.novoLote.aves_iniciais=this.value">
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Usado para calcular consumo estimado e projeção de estoque</div>
       </div>
+      <div class="stitle" style="margin-top:8px">Datas previstas de troca de fórmula</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Informe a data de início de cada fase. Deixe em branco as fases não utilizadas.</div>
+      ${FASES_RACAO.map(f=>`<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:8px">
+        <label style="font-size:12px;font-weight:500;margin:0">${f.nome}<span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:4px">${f.diasDesc}</span></label>
+        <input type="date" value="${S.novoLote.formula_datas?.[f.id]||''}"
+          oninput="if(!S.novoLote.formula_datas)S.novoLote.formula_datas={};S.novoLote.formula_datas['${f.id}']=this.value"
+          style="padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;width:160px">
+      </div>`).join('')}
       ${S.novoLote.chegada?`<div style="background:white;border:1px solid var(--verde-border);border-radius:6px;padding:8px 12px;font-size:12px;color:#065F46;margin-bottom:12px"><strong>${semanas(S.novoLote.chegada)} semanas</strong> · <span class="badge ${fase(semanas(S.novoLote.chegada)).c}">${fase(semanas(S.novoLote.chegada)).l}</span></div>`:''}
       <button class="btn-sub" style="margin-top:4px" onclick="adicionarLote()">Salvar lote no Firebase</button>
     </div>`:''}`;
@@ -1197,7 +1239,7 @@ async function subRacao(){
       const lote=S.lotes.find(l=>l.id===loteId);if(!lote)continue;
       const bat=v.batidas||0;const qtdPorBatida=v.qtd_por_batida||1000;
       const ratioKg=qtdPorBatida/1000;
-      const faseId=lote.formula_fase||getFaseAtual(semanas(lote.chegada))?.id;
+      const faseId=lote.formula_fase||getFaseAtualPorData(lote)?.id||getFaseAtual(semanas(lote.chegada))?.id;
       if(!faseId)continue;
       if(!S.formulas[faseId]){
         try{const d=await db.collection('formulas_racao').doc(faseId).get();if(d.exists)S.formulas[faseId]=d.data();}catch(e){}
@@ -1317,16 +1359,16 @@ async function subMort(){
 
 // ── GESTÃO DE LOTES ───────────────────────────────────────────────────────────
 async function adicionarLote(){
-  const{nome,gen,tipo,chegada,aves_iniciais}=S.novoLote;
+  const{nome,gen,tipo,chegada,aves_iniciais,formula_datas}=S.novoLote;
   if(!nome||!gen||!chegada)return alert('Preencha todos os campos.');
   if(!aves_iniciais||parseInt(aves_iniciais)<=0)return alert('Informe a quantidade de aves na chegada.');
   const id=nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
   const aves=parseInt(aves_iniciais);
   try{
-    await db.collection('lotes').doc(id).set({nome,gen,tipo,chegada,ativo:true,aves_iniciais:aves});
-    S.lotes.push({id,nome,gen,tipo,chegada,ativo:true,aves_iniciais:aves});
+    await db.collection('lotes').doc(id).set({nome,gen,tipo,chegada,ativo:true,aves_iniciais:aves,formula_datas:formula_datas||{}});
+    S.lotes.push({id,nome,gen,tipo,chegada,ativo:true,aves_iniciais:aves,formula_datas:formula_datas||{}});
     S.lotes.sort((a,b)=>a.nome.localeCompare(b.nome));
-    S.novoLote={nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:''};S.showAdd=false;
+    S.novoLote={nome:'',gen:'',tipo:'gaiola',chegada:'',aves_iniciais:'',formula_datas:{}};S.showAdd=false;
     toast('✓ Lote adicionado!');render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
@@ -1530,7 +1572,49 @@ async function confirmarCorrecaoFase(loteId, novaFaseId){
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
-async function selecionarFormula(loteId, faseId, variacao){
+function toggleEditarDatas(loteId){
+  const lote=S.lotes.find(l=>l.id===loteId);if(!lote)return;
+  // Abre modal inline com os campos de data
+  const modal=document.createElement('div');
+  modal.id='modal-datas-'+loteId;
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`<div style="background:var(--card);border-radius:14px;padding:20px;width:min(460px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:500;margin-bottom:4px">Datas de troca — ${lote.nome}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Informe a data de início de cada fase. Deixe vazio para fases não utilizadas.</div>
+    ${FASES_RACAO.map(f=>`<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin-bottom:10px">
+      <div>
+        <div style="font-size:13px;font-weight:500">${f.nome}</div>
+        <div style="font-size:11px;color:var(--muted)">${f.diasDesc}</div>
+      </div>
+      <input type="date" id="dt_${loteId}_${f.id}" value="${lote.formula_datas?.[f.id]||''}"
+        style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;width:160px">
+    </div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="document.getElementById('modal-datas-${loteId}').remove()"
+        style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:transparent;font-family:inherit">Cancelar</button>
+      <button onclick="salvarDatasFormula('${loteId}')"
+        style="flex:1;padding:10px;background:var(--verde);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Salvar datas</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+async function salvarDatasFormula(loteId){
+  const datas={};
+  FASES_RACAO.forEach(f=>{
+    const val=document.getElementById(`dt_${loteId}_${f.id}`)?.value;
+    if(val)datas[f.id]=val;
+  });
+  try{
+    await db.collection('lotes').doc(loteId).update({formula_datas:datas});
+    const lote=S.lotes.find(l=>l.id===loteId);
+    if(lote)lote.formula_datas=datas;
+    document.getElementById('modal-datas-'+loteId)?.remove();
+    toast(`✓ Datas de troca salvas — ${lote?.nome||loteId}`);
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
+}
   try{
     await db.collection('lotes').doc(loteId).update({
       formula_fase: faseId,
