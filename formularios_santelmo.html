@@ -1615,6 +1615,8 @@ async function salvarDatasFormula(loteId){
     render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
+
+async function selecionarFormula(loteId, faseId, variacao){
   try{
     await db.collection('lotes').doc(loteId).update({
       formula_fase: faseId,
