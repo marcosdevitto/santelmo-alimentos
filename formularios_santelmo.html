@@ -1003,63 +1003,91 @@ function t4(){
                 style="padding:5px 12px;border:1px solid var(--verde-border);border-radius:6px;font-size:12px;background:var(--verde-light);color:var(--verde);cursor:pointer;white-space:nowrap">Salvar</button>
             </div>`}
         ${(()=>{
-          const faseAtualObj=getFaseAtualPorData(l);
-          const proxTroca=getProximaTrocaPorData(l);
-          const dias=diasParaTroca(l);
-          const fm=S.formulas[faseAtualObj?.id];
+          // formula_fase é a fonte de verdade — só muda quando o usuário confirma manualmente
+          const faseAtualId=l.formula_fase||null;
+          const faseAtualObj=FASES_RACAO.find(f=>f.id===faseAtualId);
+          const faseAtualIdx=faseAtualObj?FASES_RACAO.indexOf(faseAtualObj):-1;
+          const fm=S.formulas[faseAtualId];
           const variacoes=fm?.variacoes||[];
           const varAtual=l.formula_variacao||'padrao';
           const opcoes=[{val:'padrao',label:'Padrão'},...variacoes.map(v=>({val:v.nome,label:v.nome}))];
           const temDatas=l.formula_datas&&Object.values(l.formula_datas).some(d=>d);
+          const hoje=new Date();hoje.setHours(0,0,0,0);
 
-          // Seletor de variação
-          const selectorHtml=faseAtualObj&&opcoes.length>1?`
-            <div style="margin-top:8px;padding:8px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
-              <div style="font-size:11px;font-weight:600;color:var(--verde);margin-bottom:6px">Fórmula em uso — ${faseAtualObj.nome}</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
-                ${opcoes.map(o=>`<button onclick="selecionarFormula('${l.id}','${faseAtualObj.id}','${o.val}')"
-                  style="padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${varAtual===o.val?'var(--verde)':'var(--border)'};background:${varAtual===o.val?'var(--verde)':'var(--card)'};color:${varAtual===o.val?'white':'var(--muted)'}">
-                  ${varAtual===o.val?'✓ ':''}${o.label}</button>`).join('')}
-              </div>
-            </div>`:faseAtualObj?`
-            <div style="font-size:12px;color:var(--muted);margin-top:6px;padding:7px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
-              🌾 <strong style="color:var(--verde)">${faseAtualObj.nome}</strong> — fórmula padrão
-            </div>`:'';
-
-          // Alerta de troca próxima
-          let alertHtml='';
-          if(proxTroca&&dias!==null){
-            if(dias<=0){
-              alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-                <span style="font-size:11px;color:#991B1B">🔴 Troca para <strong>${proxTroca.fase.nome}</strong> prevista para hoje ou anterior</span>
-              </div>`;
-            } else if(dias<=7){
-              alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;font-size:11px;color:#92400E">
-                ⚠ Troca para <strong>${proxTroca.fase.nome}</strong> em <strong>${dias} dia${dias>1?'s':''}</strong> · ${new Date(proxTroca.data+'T12:00:00').toLocaleDateString('pt-BR')}
-              </div>`;
+          // Primeira fase planejada que passou mas ainda não foi confirmada
+          let faseAtrasada=null;
+          if(faseAtualObj&&l.formula_datas){
+            for(const f of FASES_RACAO.slice(faseAtualIdx+1)){
+              const dt=l.formula_datas[f.id];
+              if(dt&&new Date(dt+'T00:00:00')<=hoje){faseAtrasada={fase:f,data:dt};break;}
             }
           }
 
-          // Seção de datas de troca
+          // Próxima fase planejada ainda no futuro
+          let proxPlano=null;
+          if(faseAtualObj&&l.formula_datas){
+            for(const f of FASES_RACAO.slice(faseAtualIdx+1)){
+              const dt=l.formula_datas[f.id];
+              if(dt&&new Date(dt+'T00:00:00')>hoje){proxPlano={fase:f,data:dt};break;}
+            }
+          }
+          const diasProx=proxPlano?Math.ceil((new Date(proxPlano.data+'T00:00:00')-hoje)/(24*60*60*1000)):null;
+
+          // Seletor de variação dentro da fase atual
+          const selectorHtml=!faseAtualObj
+            ?`<div style="font-size:12px;color:#D97706;margin-top:6px;padding:7px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:7px">⚠ Nenhuma fórmula confirmada — use 🔄 Corrigir fase</div>`
+            :opcoes.length>1
+            ?`<div style="margin-top:8px;padding:8px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
+                <div style="font-size:11px;font-weight:600;color:var(--verde);margin-bottom:6px">Fórmula em uso — ${faseAtualObj.nome}</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  ${opcoes.map(o=>`<button onclick="selecionarFormula('${l.id}','${faseAtualId}','${o.val}')"
+                    style="padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${varAtual===o.val?'var(--verde)':'var(--border)'};background:${varAtual===o.val?'var(--verde)':'var(--card)'};color:${varAtual===o.val?'white':'var(--muted)'}">
+                    ${varAtual===o.val?'✓ ':''}${o.label}</button>`).join('')}
+                </div>
+              </div>`
+            :`<div style="font-size:12px;color:var(--muted);margin-top:6px;padding:7px 10px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:7px">
+                🌾 <strong style="color:var(--verde)">${faseAtualObj.nome}</strong> — fórmula padrão
+              </div>`;
+
+          // Alertas
+          let alertHtml='';
+          if(faseAtrasada){
+            alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <div>
+                <div style="font-size:11px;color:#991B1B;font-weight:600">🔴 Troca pendente: ${faseAtrasada.fase.nome}</div>
+                <div style="font-size:11px;color:#991B1B;margin-top:1px">Prevista para ${new Date(faseAtrasada.data+'T12:00:00').toLocaleDateString('pt-BR')}</div>
+              </div>
+              <button onclick="abrirCorrecaoFase('${l.id}')" style="padding:5px 12px;background:#DC2626;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">Confirmar →</button>
+            </div>`;
+          } else if(diasProx!==null&&diasProx<=7){
+            alertHtml=`<div style="margin-top:6px;padding:8px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;font-size:11px;color:#92400E">
+              ⚠ Trocar para <strong>${proxPlano.fase.nome}</strong> em <strong>${diasProx} dia${diasProx!==1?'s':''}</strong> · ${new Date(proxPlano.data+'T12:00:00').toLocaleDateString('pt-BR')}
+            </div>`;
+          }
+
+          // Tabela de datas planejadas
           const datasHtml=`<div style="margin-top:8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Datas de troca</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Datas planejadas de troca</div>
               <button onclick="toggleEditarDatas('${l.id}')" style="font-size:11px;padding:2px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit">✏ Editar</button>
             </div>
+            <div style="font-size:11px;color:var(--muted);font-style:italic;margin-bottom:6px">Apenas referência para avisos — a fórmula muda somente ao confirmar manualmente</div>
             ${FASES_RACAO.map(f=>{
               const dt=l.formula_datas?.[f.id];
               if(!dt)return'';
               const dtObj=new Date(dt+'T00:00:00');
-              const hojeN=new Date();hojeN.setHours(0,0,0,0);
-              const isAtual=faseAtualObj?.id===f.id;
-              const isProx=proxTroca?.fase?.id===f.id;
-              const passou=dtObj<=hojeN;
+              const isAtual=faseAtualId===f.id;
+              const isAtrasada=faseAtrasada?.fase?.id===f.id;
+              const isProx=proxPlano?.fase?.id===f.id;
+              const passou=dtObj<=hoje;
               return`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--border);font-size:12px">
-                <span style="color:${isAtual?'var(--verde)':passou?'var(--muted)':'var(--ink)'}${isAtual?';font-weight:600':''}">${f.nome}</span>
-                <span style="font-family:var(--mono);font-size:11px;color:${isProx?'#D97706':isAtual?'var(--verde)':'var(--muted)'}">${dtObj.toLocaleDateString('pt-BR')}${isAtual?' ✓':''}</span>
+                <span style="color:${isAtual?'var(--verde)':passou?'var(--muted)':'var(--ink)'}${isAtual?';font-weight:600':''}">${f.nome}${f.id==='pico'?' <span style="font-size:10px;color:var(--muted)">(primeiro ovo)</span>':''}</span>
+                <span style="font-family:var(--mono);font-size:11px;color:${isAtrasada?'#DC2626':isProx?'#D97706':isAtual?'var(--verde)':'var(--muted)'};font-weight:${isAtual||isAtrasada?'600':'400'}">
+                  ${dtObj.toLocaleDateString('pt-BR')}${isAtual?' ✓':''}${isAtrasada?' ⚠':''}
+                </span>
               </div>`;
             }).filter(Boolean).join('')}
-            ${!temDatas?`<div style="font-size:11px;color:#D97706;padding:4px 0">⚠ Nenhuma data de troca informada</div>`:''}
+            ${!temDatas?`<div style="font-size:11px;color:#D97706;padding:4px 0">⚠ Nenhuma data informada — clique em ✏ Editar</div>`:''}
           </div>`;
 
           return`${selectorHtml}${alertHtml}${datasHtml}`;
@@ -1386,18 +1414,25 @@ function abrirCorrecaoFase(loteId){
   if(!modal||!nomEl||!opEl)return;
 
   const sem=semanas(lote.chegada);
-  const faseAtual=lote.formula_fase||getFaseAtual(sem)?.id||null;
+  // Usa sistema de datas como referência principal
+  const faseAtualObj=getFaseAtualPorData(lote);
+  const faseAtual=faseAtualObj?.id||null;
 
   nomEl.textContent=`${lote.nome} · ${lote.gen} · sem ${sem}`;
 
   opEl.innerHTML=FASES_RACAO.map(f=>{
     const isAtual=f.id===faseAtual;
     const temFormula=!!S.formulas[f.id]?.padrao?.ings?.length;
+    const temData=!!lote.formula_datas?.[f.id];
     return`<button onclick="confirmarCorrecaoFase('${loteId}','${f.id}')"
       style="padding:10px 14px;border-radius:8px;border:1.5px solid ${isAtual?'var(--verde)':'var(--border)'};
         background:${isAtual?'var(--verde-light)':'var(--card)'};color:${isAtual?'var(--verde)':'var(--ink)'};
         font-size:13px;cursor:pointer;font-family:inherit;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <span>${isAtual?'✓ ':''}${f.nome}<span style="font-size:11px;color:var(--muted);margin-left:4px">${f.diasDesc}</span></span>
+      <span>
+        ${isAtual?'✓ ':''}${f.nome}
+        <span style="font-size:11px;color:var(--muted);margin-left:4px">${f.diasDesc}</span>
+        ${temData?`<span style="font-size:10px;color:var(--verde);margin-left:4px">${new Date(lote.formula_datas[f.id]+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:''}
+      </span>
       ${!temFormula?`<span style="font-size:10px;color:#D97706;background:#FEF3C7;padding:2px 6px;border-radius:6px">sem fórmula</span>`:''}
     </button>`;
   }).join('');
@@ -1549,15 +1584,29 @@ async function confirmarCorrecaoFase(loteId, novaFaseId){
   const lote=S.lotes.find(l=>l.id===loteId);
   const fase=FASES_RACAO.find(f=>f.id===novaFaseId);
   if(!lote||!fase)return;
+
+  // Se a fase não tem data cadastrada, pergunta se quer definir hoje
+  const jaTemData=!!lote.formula_datas?.[novaFaseId];
+  let dataParaSalvar=null;
+  if(!jaTemData){
+    const hoje=new Date().toISOString().split('T')[0];
+    const resposta=prompt(`A fase "${fase.nome}" não tem data cadastrada.\n\nInforme a data de início (ou deixe em branco para usar hoje ${new Date().toLocaleDateString('pt-BR')}):`,hoje);
+    if(resposta===null)return; // cancelou
+    dataParaSalvar=resposta.trim()||hoje;
+  }
+
   try{
+    const novasDatas={...lote.formula_datas||{}};
+    if(dataParaSalvar)novasDatas[novaFaseId]=dataParaSalvar;
+
     await db.collection('lotes').doc(loteId).update({
       formula_fase:novaFaseId,
       formula_variacao:'padrao',
+      formula_datas:novasDatas,
     });
-    // Registra no histórico
     await db.collection('lotes').doc(loteId).collection('historico_formula').add({
       data:FS.Timestamp.fromDate(new Date()),
-      de:lote.formula_fase||'—',
+      de:getFaseAtualPorData(lote)?.id||'—',
       para:novaFaseId,
       semana:semanas(lote.chegada),
       formula_variacao:'padrao',
@@ -1566,6 +1615,7 @@ async function confirmarCorrecaoFase(loteId, novaFaseId){
     });
     lote.formula_fase=novaFaseId;
     lote.formula_variacao='padrao';
+    lote.formula_datas=novasDatas;
     fecharCorrecaoFase();
     toast(`✓ ${lote.nome} corrigido para ${fase.nome}`);
     render();
