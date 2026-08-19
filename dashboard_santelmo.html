@@ -21,6 +21,7 @@ const FIREBASE_CONFIG = {
 };
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -303,6 +304,31 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
           Buscar
         </button>
         <button class="rel-btn-copiar" id="rel-btn-copiar" style="display:none" onclick="copiarResumo()">Copiar resumo</button>
+      </div>
+
+      <!-- Exportar Excel -->
+      <div id="excel-export-area" style="margin:10px 0 2px;padding:12px 14px;background:var(--verde-light);border:1px solid var(--verde-border);border-radius:9px">
+        <div style="font-size:12px;font-weight:600;color:var(--verde);margin-bottom:8px">Exportar para Excel</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+            <span>De</span>
+            <input type="date" id="excel-data-ini" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+            <span>até</span>
+            <input type="date" id="excel-data-fim" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="xls-prod" checked> Produtividade</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="xls-entre" checked> Entreposto</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="xls-racao" checked> Ração</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="xls-mort" checked> Mortalidade</label>
+        </div>
+        <button onclick="exportarExcel()" id="btn-excel"
+          style="width:100%;padding:9px;background:var(--verde);color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;font-family:inherit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          Exportar Excel
+        </button>
+        <div id="excel-status" style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;min-height:14px"></div>
       </div>
       <div id="rel-content">
         <div class="rel-empty-state">Escolha uma data e clique em Buscar para ver os dados do dia.</div>
@@ -1641,11 +1667,201 @@ function renderRelPesoData(dataKey){
 }
 
 // ── RELATÓRIO DIÁRIO ──────────────────────────────────────────────────────────
+// ── EXPORTAR EXCEL ────────────────────────────────────────────────────────────
+async function exportarExcel(){
+  const ini=document.getElementById('excel-data-ini').value;
+  const fim=document.getElementById('excel-data-fim').value;
+  if(!ini||!fim){alert('Selecione o período de início e fim.');return;}
+  if(ini>fim){alert('A data inicial deve ser anterior à data final.');return;}
+
+  const inclProd=document.getElementById('xls-prod').checked;
+  const inclEntre=document.getElementById('xls-entre').checked;
+  const inclRacao=document.getElementById('xls-racao').checked;
+  const inclMort=document.getElementById('xls-mort').checked;
+
+  const btn=document.getElementById('btn-excel');
+  const status=document.getElementById('excel-status');
+  btn.disabled=true;btn.textContent='⏳ Buscando dados...';status.textContent='';
+
+  try{
+    // Gera array de datas no período
+    const datas=[];
+    const d=new Date(ini+'T00:00:00');const fim2=new Date(fim+'T00:00:00');
+    while(d<=fim2){datas.push(d.toISOString().split('T')[0]);d.setDate(d.getDate()+1);}
+
+    status.textContent=`Buscando ${datas.length} dias...`;
+
+    // Busca todas as coleções em paralelo
+    const [prodSnap,entreSnap,racaoSnap,mortSnap]=await Promise.all([
+      inclProd?db.collection('produtividade').where(firebase.firestore.FieldPath.documentId(),'>=',ini).where(firebase.firestore.FieldPath.documentId(),'<=',fim).get():null,
+      inclEntre?db.collection('entreposto').where(firebase.firestore.FieldPath.documentId(),'>=',ini+'_').where(firebase.firestore.FieldPath.documentId(),'<=',fim+'_z').get():null,
+      inclRacao?db.collection('racao').where(firebase.firestore.FieldPath.documentId(),'>=',ini).where(firebase.firestore.FieldPath.documentId(),'<=',fim).get():null,
+      inclMort?db.collection('mortalidade').where(firebase.firestore.FieldPath.documentId(),'>=',ini).where(firebase.firestore.FieldPath.documentId(),'<=',fim).get():null,
+    ]);
+
+    // Indexa por data
+    const prod={};prodSnap?.docs.forEach(d=>prod[d.id]=d.data());
+    const racao={};racaoSnap?.docs.forEach(d=>racao[d.id]=d.data());
+    const mort={};mortSnap?.docs.forEach(d=>mort[d.id]=d.data());
+    const entre={gaiola:{},soltas:{}};
+    entreSnap?.docs.forEach(d=>{
+      if(d.id.endsWith('_gaiola'))entre.gaiola[d.id.replace('_gaiola','')]=d.data();
+      if(d.id.endsWith('_soltas'))entre.soltas[d.id.replace('_soltas','')]=d.data();
+    });
+
+    const lotesAtivos=LOTES.filter(id=>META[id]?.ativo!==false);
+    const wb=XLSX.utils.book_new();
+
+    // ── ABA RESUMO ──────────────────────────────────────────────────────────────
+    const hResume=['Data'];
+    if(inclProd)lotesAtivos.forEach(id=>hResume.push(META[id]?.nome+' %'));
+    if(inclProd)hResume.push('Média %');
+    if(inclEntre){hResume.push('Grande','Extra','Jumbo','Sem class.','Ovo líquido');}
+    if(inclRacao){hResume.push('Ração total kg','Batidas');}
+    if(inclMort){hResume.push('Mortes gaiola','Mortes soltas','Total mortes','Temp máx °C','Temp mín °C');}
+
+    const rowsResume=[hResume];
+    datas.forEach(dt=>{
+      const row=[dt];
+      if(inclProd){
+        const p=prod[dt];
+        const pcts=lotesAtivos.map(id=>{
+          const ld=p?.lotes?.[id];if(!ld)return'';
+          return Math.round(((ld.frente||0)+(ld.meio||0)+(ld.fundo||0))/360*1000)/10;
+        });
+        pcts.forEach(v=>row.push(v));
+        const vals=pcts.filter(v=>v!=='');
+        row.push(vals.length?Math.round(vals.reduce((s,v)=>s+v,0)/vals.length*10)/10:'');
+      }
+      if(inclEntre){
+        const eg=entre.gaiola[dt]||{};
+        row.push(eg.grande||'',eg.extra||'',eg.jumbo||'',eg.sem_classificacao||'',eg.ovo_liquido||'');
+      }
+      if(inclRacao){
+        const r=racao[dt];
+        row.push(r?.total_kg||'',r?.total_batidas||'');
+      }
+      if(inclMort){
+        const m=mort[dt];
+        const mortGaiola=m?Object.entries(m.lotes||{}).filter(([id])=>META[id]?.tipo!=='soltas').reduce((s,[,v])=>s+(v||0),0):'';
+        const mortSoltas=m?Object.entries(m.lotes||{}).filter(([id])=>META[id]?.tipo==='soltas').reduce((s,[,v])=>s+(v||0),0):'';
+        const total=mortGaiola!==''||mortSoltas!==''?(mortGaiola||0)+(mortSoltas||0):'';
+        const tmax=m?.temperaturas?.[Object.keys(m.temperaturas||{})[0]]?.max||'';
+        const tmin=m?.temperaturas?.[Object.keys(m.temperaturas||{})[0]]?.min||'';
+        row.push(mortGaiola,mortSoltas,total,tmax,tmin);
+      }
+      rowsResume.push(row);
+    });
+    const wsResume=XLSX.utils.aoa_to_sheet(rowsResume);
+    estilizarSheet(wsResume,rowsResume);
+    XLSX.utils.book_append_sheet(wb,wsResume,'Resumo');
+
+    // ── ABA PRODUTIVIDADE ───────────────────────────────────────────────────────
+    if(inclProd){
+      const hProd=['Data','Lote','Frente','Meio','Fundo','Total ovos','% produção'];
+      const rowsProd=[hProd];
+      datas.forEach(dt=>{
+        const p=prod[dt];
+        lotesAtivos.forEach(id=>{
+          const ld=p?.lotes?.[id];if(!ld)return;
+          const tot=(ld.frente||0)+(ld.meio||0)+(ld.fundo||0);
+          rowsProd.push([dt,META[id]?.nome,ld.frente||0,ld.meio||0,ld.fundo||0,tot,Math.round(tot/360*1000)/10]);
+        });
+      });
+      const wsProd=XLSX.utils.aoa_to_sheet(rowsProd);
+      estilizarSheet(wsProd,rowsProd);
+      XLSX.utils.book_append_sheet(wb,wsProd,'Produtividade');
+    }
+
+    // ── ABA ENTREPOSTO ──────────────────────────────────────────────────────────
+    if(inclEntre){
+      const hEnt=['Data','Grande','Extra','Jumbo','Sem class.','Ovo líquido'];
+      const rowsEnt=[hEnt];
+      datas.forEach(dt=>{
+        const eg=entre.gaiola[dt];if(!eg)return;
+        rowsEnt.push([dt,eg.grande||0,eg.extra||0,eg.jumbo||0,eg.sem_classificacao||0,eg.ovo_liquido||0]);
+      });
+      const wsEnt=XLSX.utils.aoa_to_sheet(rowsEnt);
+      estilizarSheet(wsEnt,rowsEnt);
+      XLSX.utils.book_append_sheet(wb,wsEnt,'Entreposto');
+    }
+
+    // ── ABA RAÇÃO ───────────────────────────────────────────────────────────────
+    if(inclRacao){
+      const hRac=['Data','Lote','Batidas','Kg/batida','Total kg','Fórmula'];
+      const rowsRac=[hRac];
+      datas.forEach(dt=>{
+        const r=racao[dt];if(!r?.lotes)return;
+        Object.entries(r.lotes).forEach(([id,v])=>{
+          const lote=META[id];
+          const faseId=lote?.formula_fase||'—';
+          const faseFase=FASES_RACAO?.find(f=>f.id===faseId)?.nome||faseId;
+          const variac=lote?.formula_variacao||'padrao';
+          rowsRac.push([dt,lote?.nome||id,v.batidas||0,v.qtd_por_batida||1000,v.total_kg||0,`${faseFase} — ${variac==='padrao'?'Padrão':variac}`]);
+        });
+      });
+      const wsRac=XLSX.utils.aoa_to_sheet(rowsRac);
+      estilizarSheet(wsRac,rowsRac);
+      XLSX.utils.book_append_sheet(wb,wsRac,'Ração');
+    }
+
+    // ── ABA MORTALIDADE ─────────────────────────────────────────────────────────
+    if(inclMort){
+      const hMort=['Data','Lote','Mortes','Temp máx °C','Temp mín °C'];
+      const rowsMort=[hMort];
+      datas.forEach(dt=>{
+        const m=mort[dt];if(!m)return;
+        const galpao=Object.keys(m.temperaturas||{})[0];
+        const tmax=m.temperaturas?.[galpao]?.max||'';
+        const tmin=m.temperaturas?.[galpao]?.min||'';
+        let first=true;
+        Object.entries(m.lotes||{}).forEach(([id,v])=>{
+          rowsMort.push([dt,META[id]?.nome||id,v||0,first?tmax:'',first?tmin:'']);
+          first=false;
+        });
+      });
+      const wsMort=XLSX.utils.aoa_to_sheet(rowsMort);
+      estilizarSheet(wsMort,rowsMort);
+      XLSX.utils.book_append_sheet(wb,wsMort,'Mortalidade');
+    }
+
+    // Download
+    const nomeFmt=`Santelmo_${ini.replace(/-/g,'')}_${fim.replace(/-/g,'')}.xlsx`;
+    XLSX.writeFile(wb,nomeFmt);
+    status.textContent=`✓ ${nomeFmt} exportado!`;
+  }catch(e){
+    status.textContent='Erro: '+e.message;
+    console.error(e);
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg> Exportar Excel';
+  }
+}
+
+function estilizarSheet(ws,rows){
+  // Largura automática das colunas
+  const colWidths=[];
+  rows.forEach(row=>row.forEach((cell,i)=>{
+    const len=String(cell??'').length;
+    colWidths[i]=Math.max(colWidths[i]||0,len);
+  }));
+  ws['!cols']=colWidths.map(w=>({wch:Math.min(Math.max(w+2,8),40)}));
+}
+
+// Define datas padrão no load do relatório
 function abrirRelatorio(){
   const overlay=document.getElementById('rel-overlay');
   const inp=document.getElementById('rel-data');
   inp.value=HOJE_ISO;
   inp.max=HOJE_ISO;
+  // Define datas padrão do Excel: últimos 30 dias
+  const ini=document.getElementById('excel-data-ini');
+  const fim=document.getElementById('excel-data-fim');
+  if(!ini.value){
+    const trintaDias=new Date();trintaDias.setDate(trintaDias.getDate()-30);
+    ini.value=trintaDias.toISOString().split('T')[0];
+  }
+  if(!fim.value)fim.value=HOJE_ISO;
   overlay.style.display='flex';
   document.body.style.overflow='hidden';
 }
