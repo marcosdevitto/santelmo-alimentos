@@ -1988,8 +1988,8 @@ function tEstoque(){
             return`<tr style="border-top:1px solid var(--border)">
               <td style="padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--muted)">${dt.toLocaleDateString('pt-BR')}</td>
               <td style="padding:6px 10px;font-weight:500">${m.ingrediente}</td>
-              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':m.tipo==='estorno_batida'?'#EFF6FF':'#FEE2E2'};color:${isEntrada?'#065F46':m.tipo==='estorno_batida'?'#1E40AF':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':m.tipo==='estorno_batida'?'#BFDBFE':'#FCA5A5'}">${isEntrada?'entrada':m.tipo==='estorno_batida'?'estorno':'saída batida'}</span></td>
-              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':m.tipo==='estorno_batida'?'#1E40AF':'#DC2626'}">${isEntrada?'+':m.tipo==='estorno_batida'?'+':'-'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
+              <td style="padding:6px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:8px;font-weight:500;background:${isEntrada?'#ECFDF5':m.tipo==='estorno_batida'?'#EFF6FF':m.tipo==='ajuste_manual'?'#F5F3FF':'#FEE2E2'};color:${isEntrada?'#065F46':m.tipo==='estorno_batida'?'#1E40AF':m.tipo==='ajuste_manual'?'#6D28D9':'#991B1B'};border:0.5px solid ${isEntrada?'#A7F3D0':m.tipo==='estorno_batida'?'#BFDBFE':m.tipo==='ajuste_manual'?'#DDD6FE':'#FCA5A5'}">${isEntrada?'entrada':m.tipo==='estorno_batida'?'estorno':m.tipo==='ajuste_manual'?'ajuste':'saída batida'}</span></td>
+              <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:500;color:${isEntrada?'#059669':m.tipo==='estorno_batida'?'#1E40AF':m.tipo==='ajuste_manual'?'#6D28D9':'#DC2626'}">${isEntrada||m.tipo==='estorno_batida'?'+':m.tipo==='ajuste_manual'?'±':'-'}${(m.qtd||0).toLocaleString('pt-BR')} kg</td>
               <td style="padding:6px 10px;font-size:11px;color:var(--muted)">${m.ref||'—'}</td>
               <td style="padding:6px 10px;text-align:center">
                 <div style="display:flex;gap:4px;justify-content:center">
@@ -2044,21 +2044,101 @@ function tEstoque(){
 
 async function abrirConfigItem(nome){
   const item=S.estoque.itens.find(i=>i.nome===nome);
+  const saldoAtual=item?.qtd_atual||0;
   const kgAtual=item?.kg_por_saco||'';
-  const minAtual=item?.estoque_minimo||'';
-  const novoKg=prompt(`Configurar "${nome}"\n\nKg por saco (deixe vazio para mostrar em kg):\nAtual: ${kgAtual||'sem saco definido'}`,kgAtual);
-  if(novoKg===null)return;
-  const novoMin=prompt(`Estoque mínimo em kg:\nAtual: ${minAtual||'sem mínimo'}`,minAtual);
-  if(novoMin===null)return;
+  const minAtual=item?.estoque_minimo||0;
+
+  // Remove modal anterior se existir
+  document.getElementById('modal-config-item')?.remove();
+
+  const modal=document.createElement('div');
+  modal.id='modal-config-item';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:var(--card);border-radius:14px;padding:20px;width:min(400px,100%);box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-size:15px;font-weight:500;margin-bottom:4px">Configurar item</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${nome}</div>
+
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Saldo atual</div>
+          <div style="font-size:20px;font-weight:500;font-family:var(--mono);margin-top:2px">${saldoAtual.toLocaleString('pt-BR')} kg</div>
+        </div>
+        <span style="font-size:11px;padding:3px 9px;border-radius:10px;background:${saldoAtual<=0?'#FEE2E2':'#ECFDF5'};color:${saldoAtual<=0?'#991B1B':'#065F46'};border:1px solid ${saldoAtual<=0?'#FCA5A5':'#A7F3D0'}">${saldoAtual<=0?'zerado':'ok'}</span>
+      </div>
+
+      <div style="border:1px solid #FDE68A;border-radius:8px;padding:12px;background:#FFFBEB;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:8px">⚖️ Corrigir saldo</div>
+        <div style="font-size:11px;color:#92400E;margin-bottom:8px">Use quando o saldo do sistema não reflete o estoque físico real.</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="ci-saldo" min="0" step="0.1" value="${saldoAtual}"
+            style="flex:1;padding:7px 10px;border:1.5px solid #FDE68A;border-radius:7px;font-size:13px;font-family:inherit">
+          <span style="font-size:12px;color:#92400E;white-space:nowrap">kg</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px">Kg por saco</label>
+          <input type="number" id="ci-kgsaco" min="0" step="0.1" value="${kgAtual}"
+            placeholder="ex: 40" style="padding:7px 10px;font-size:13px">
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Deixe vazio para exibir em kg</div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px">Estoque mínimo (kg)</label>
+          <input type="number" id="ci-min" min="0" step="1" value="${minAtual||''}"
+            placeholder="ex: 500" style="padding:7px 10px;font-size:13px">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('modal-config-item').remove()"
+          style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:transparent;font-family:inherit">Cancelar</button>
+        <button onclick="salvarConfigItem('${nome}',${saldoAtual})"
+          style="flex:2;padding:10px;background:var(--verde);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+async function salvarConfigItem(nome, saldoAnterior){
+  const novoSaldo=parseFloat(document.getElementById('ci-saldo')?.value);
+  const kgSaco=parseFloat(document.getElementById('ci-kgsaco')?.value)||null;
+  const estoqueMin=parseFloat(document.getElementById('ci-min')?.value)||0;
+
+  if(isNaN(novoSaldo)||novoSaldo<0)return alert('Informe um saldo válido.');
+  if(!S.resp)return alert('Informe o responsável no topo da tela.');
+
   try{
     const itemRef=db.collection('estoque_itens').doc(nome.toLowerCase().replace(/\s+/g,'_'));
-    const upd={estoque_minimo:parseFloat(novoMin)||0};
-    if(novoKg&&parseFloat(novoKg)>0)upd.kg_por_saco=parseFloat(novoKg);
+    const upd={qtd_atual:novoSaldo,estoque_minimo:estoqueMin,ultima_atualizacao:FS.FieldValue.serverTimestamp()};
+    if(kgSaco&&kgSaco>0)upd.kg_por_saco=kgSaco;
     else upd.kg_por_saco=null;
     await itemRef.set(upd,{merge:true});
+
+    // Registra ajuste no histórico se o saldo mudou
+    const diff=novoSaldo-saldoAnterior;
+    if(Math.abs(diff)>0.01){
+      await db.collection('estoque_movimentos').add({
+        ingrediente:nome,
+        tipo:'ajuste_manual',
+        qtd:Math.abs(diff),
+        data:FS.Timestamp.fromDate(new Date()),
+        responsavel:S.resp||'—',
+        ref:`Ajuste manual: ${saldoAnterior.toLocaleString('pt-BR')} → ${novoSaldo.toLocaleString('pt-BR')} kg`,
+        timestamp:FS.FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Atualiza estado local
     const idx=S.estoque.itens.findIndex(i=>i.nome===nome);
     if(idx>=0)Object.assign(S.estoque.itens[idx],upd);
-    toast(`✓ ${nome} configurado`);render();
+    S.estoque.carregado=false; // força reload dos movimentos na próxima visita
+
+    document.getElementById('modal-config-item')?.remove();
+    toast(`✓ ${nome} — saldo corrigido para ${novoSaldo.toLocaleString('pt-BR')} kg`);
+    render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
