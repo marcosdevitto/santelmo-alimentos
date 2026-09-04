@@ -369,11 +369,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
   </div>
   <div class="card grid-1"><div class="card-header"><div><div class="card-title">Galinhas Soltas — Produção diária</div><div class="card-sub">Últimos 10 dias · ninho vs chão · % de cada origem</div></div><span class="card-tag tag-purple">10 dias</span></div><div id="soltas-body"><div class="loading-card"><div class="spinner"></div></div></div></div>
   <div class="card grid-1"><div class="card-header"><div><div class="card-title">Ração produzida</div><div class="card-sub">Últimos 10 dias · total e distribuição por lote · ┊ = segunda-feira</div></div><span class="card-tag tag-amber">10 dias</span></div><div class="chart-lg"><canvas id="chartRacao"></canvas></div><div class="custom-legend" id="legend-racao"></div></div>
-  <div class="grid-2-eq">
-    <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Gaiola</div><div class="card-sub">Últimos 10 dias · temp. Galpão Produção</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortGaiola"></canvas></div><div class="custom-legend" id="legend-mort-gaiola"></div></div>
-    <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Galinhas soltas</div><div class="card-sub">Últimos 10 dias · temp. Galpão Soltas</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortSoltas"></canvas></div><div class="custom-legend" id="legend-mort-soltas"></div></div>
-    <div class="card" id="card-mort-recria" style="display:none"><div class="card-header"><div><div class="card-title">Mortalidade — Recria</div><div class="card-sub">Últimos 10 dias · temp. Galpão Recria</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortRecria"></canvas></div><div class="custom-legend" id="legend-mort-recria"></div></div>
-  </div>
+  <div class="card grid-1"><div class="card-header"><div><div class="card-title">Mortalidade — Gaiola</div><div class="card-sub">Últimos 20 dias · temp. Galpão Produção</div></div><span class="card-tag tag-red">20 dias</span></div><div class="chart-lg"><canvas id="chartMortGaiola"></canvas></div><div class="custom-legend" id="legend-mort-gaiola"></div></div>
+  <div class="card grid-1"><div class="card-header"><div><div class="card-title">Mortalidade — Galinhas soltas</div><div class="card-sub">Últimos 20 dias · temp. Galpão Soltas</div></div><span class="card-tag tag-red">20 dias</span></div><div class="chart-lg"><canvas id="chartMortSoltas"></canvas></div><div class="custom-legend" id="legend-mort-soltas"></div></div>
+  <div class="card grid-1" id="card-mort-recria" style="display:none"><div class="card-header"><div><div class="card-title">Mortalidade — Recria</div><div class="card-sub">Últimos 20 dias · temp. Galpão Recria</div></div><span class="card-tag tag-red">20 dias</span></div><div class="chart-lg"><canvas id="chartMortRecria"></canvas></div><div class="custom-legend" id="legend-mort-recria"></div></div>
   <div class="grid-1" id="peso-curves-section">
     <div class="card">
       <div class="card-header">
@@ -1106,7 +1104,7 @@ async function fetchRacao(){
 }
 async function fetchMortalidade(){
   const snap=await db.collection('mortalidade')
-    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(10).get();
+    .orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(20).get();
   return snap.docs.map(d=>({id:d.id,...d.data(),data:new Date(d.id+'T12:00:00')})).reverse();
 }
 async function fetchSoltas(){
