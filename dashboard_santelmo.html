@@ -372,6 +372,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:10
   <div class="grid-2-eq">
     <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Gaiola</div><div class="card-sub">Últimos 10 dias · temp. Galpão Produção</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortGaiola"></canvas></div><div class="custom-legend" id="legend-mort-gaiola"></div></div>
     <div class="card"><div class="card-header"><div><div class="card-title">Mortalidade — Galinhas soltas</div><div class="card-sub">Últimos 10 dias · temp. Galpão Soltas</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortSoltas"></canvas></div><div class="custom-legend" id="legend-mort-soltas"></div></div>
+    <div class="card" id="card-mort-recria" style="display:none"><div class="card-header"><div><div class="card-title">Mortalidade — Recria</div><div class="card-sub">Últimos 10 dias · temp. Galpão Recria</div></div><span class="card-tag tag-red">10 dias</span></div><div class="chart-lg"><canvas id="chartMortRecria"></canvas></div><div class="custom-legend" id="legend-mort-recria"></div></div>
   </div>
   <div class="grid-1" id="peso-curves-section">
     <div class="card">
@@ -469,7 +470,7 @@ const CURVAS_BASE = {
 
 // ── CORES E META (serão preenchidos do Firestore) ─────────────────────────────
 const CORES_FIXAS = ['#1B4D35','#2D9A68','#60C48A','#D97706','#F59E0B','#6366F1','#7C3AED','#EC4899'];
-let META={}, CORES={}, LOTES=[], LOTES_GAIOLA=[], LOTES_SOLTAS=[], CURVAS={};
+let META={}, CORES={}, LOTES=[], LOTES_GAIOLA=[], LOTES_SOLTAS=[], LOTES_RECRIA=[], CURVAS={};
 
 // ── DATAS ─────────────────────────────────────────────────────────────────────
 // Datas recalculadas dinamicamente — nunca usar como constante global
@@ -1145,7 +1146,7 @@ function renderProd(docs){
   const vistos=new Set();
   docs.forEach(lanc=>{
     Object.entries(lanc.lotes||{}).forEach(([id,v])=>{
-      if(vistos.has(id)||!META[id]||META[id].tipo!=='gaiola'||META[id].ativo===false)return; vistos.add(id);
+      if(vistos.has(id)||!META[id]||(META[id].tipo!=='gaiola'&&META[id].tipo!=='recria')||META[id].ativo===false)return; vistos.add(id);
       const m=META[id];
       const dataLanc=new Date(lanc.id+'T00:00:00');
       const chegadaNorm=new Date(m.chegada+'T00:00:00');
@@ -1453,6 +1454,7 @@ async function carregar(){
     LOTES        = lotes.map(l=>l.id);
     LOTES_GAIOLA = lotes.filter(l=>l.tipo==='gaiola').map(l=>l.id);
     LOTES_SOLTAS = lotes.filter(l=>l.tipo==='soltas').map(l=>l.id);
+    LOTES_RECRIA = lotes.filter(l=>l.tipo==='recria').map(l=>l.id);
 
     // 2. Todos os dados em paralelo
     const [prodDocs, entreDocs, racaoDados, mortDados, soltasDados, pesoDados, estoqueDados] = await Promise.all([
@@ -1472,6 +1474,11 @@ async function carregar(){
     renderRacao(racaoDados);
     renderMortChart('chartMortGaiola','legend-mort-gaiola',mortDados,LOTES_GAIOLA,'galpao_producao');
     renderMortChart('chartMortSoltas','legend-mort-soltas',mortDados,LOTES_SOLTAS,'galpao_galinhas_soltas');
+    if(LOTES_RECRIA.length){
+      renderMortChart('chartMortRecria','legend-mort-recria',mortDados,LOTES_RECRIA,'galpao_recria');
+      const cardRecria=document.getElementById('card-mort-recria');
+      if(cardRecria)cardRecria.style.display='';
+    }
     renderPesoCurves(pesoDados);
     renderEstoque(estoqueDados.itens, estoqueDados.formulas);
     renderTrocaFormula();
@@ -1719,7 +1726,7 @@ async function exportarExcel(){
     if(inclProd)hResume.push('Média %');
     if(inclEntre){hResume.push('Grande','Extra','Jumbo','Sem class.','Ovo líquido');}
     if(inclRacao){hResume.push('Ração total kg','Batidas');}
-    if(inclMort){hResume.push('Mortes gaiola','Mortes soltas','Total mortes','Temp máx °C','Temp mín °C');}
+    if(inclMort){hResume.push('Mortes gaiola','Mortes recria','Mortes soltas','Total mortes','Temp máx °C','Temp mín °C');}
 
     const rowsResume=[hResume];
     datas.forEach(dt=>{
@@ -1744,12 +1751,13 @@ async function exportarExcel(){
       }
       if(inclMort){
         const m=mort[dt];
-        const mortGaiola=m?Object.entries(m.lotes||{}).filter(([id])=>META[id]?.tipo!=='soltas').reduce((s,[,v])=>s+(v||0),0):'';
+        const mortGaiola=m?Object.entries(m.lotes||{}).filter(([id])=>META[id]?.tipo==='gaiola').reduce((s,[,v])=>s+(v||0),0):'';
         const mortSoltas=m?Object.entries(m.lotes||{}).filter(([id])=>META[id]?.tipo==='soltas').reduce((s,[,v])=>s+(v||0),0):'';
-        const total=mortGaiola!==''||mortSoltas!==''?(mortGaiola||0)+(mortSoltas||0):'';
+        const mortRecria=m?Object.entries(m.lotes||{}).filter(([id])=>META[id]?.tipo==='recria').reduce((s,[,v])=>s+(v||0),0):'';
+        const total=mortGaiola!==''||mortSoltas!==''||mortRecria!==''?(mortGaiola||0)+(mortSoltas||0)+(mortRecria||0):'';
         const tmax=m?.temperaturas?.[Object.keys(m.temperaturas||{})[0]]?.max||'';
         const tmin=m?.temperaturas?.[Object.keys(m.temperaturas||{})[0]]?.min||'';
-        row.push(mortGaiola,mortSoltas,total,tmax,tmin);
+        row.push(mortGaiola,mortRecria,mortSoltas,total,tmax,tmin);
       }
       rowsResume.push(row);
     });
