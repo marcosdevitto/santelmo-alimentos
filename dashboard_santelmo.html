@@ -757,13 +757,14 @@ function renderPesoCurves(pesoDados){
 }
 // ── FASES DE RAÇÃO ────────────────────────────────────────────────────────────
 const FASES_RACAO=[
-  {id:'cresc1',nome:'Crescimento 1',semIni:9, semFim:13},
-  {id:'cresc2',nome:'Crescimento 2',semIni:14,semFim:15},
-  {id:'prepos',nome:'Pré-postura',  semIni:16,semFim:18},
-  {id:'pico',  nome:'Pico',         semIni:19,semFim:35},
-  {id:'pos1',  nome:'Postura 1',    semIni:36,semFim:55},
-  {id:'pos2',  nome:'Postura 2',    semIni:56,semFim:70},
-  {id:'pos3',  nome:'Postura 3',    semIni:71,semFim:999},
+  {id:'inicial',nome:'Inicial',       semIni:1,  semFim:8},
+  {id:'cresc1',nome:'Crescimento 1',  semIni:9,  semFim:13},
+  {id:'cresc2',nome:'Crescimento 2',  semIni:14, semFim:15},
+  {id:'prepos',nome:'Pré-postura',    semIni:16, semFim:18},
+  {id:'pico',  nome:'Pico',           semIni:19, semFim:35},
+  {id:'pos1',  nome:'Postura 1',      semIni:36, semFim:55},
+  {id:'pos2',  nome:'Postura 2',      semIni:56, semFim:70},
+  {id:'pos3',  nome:'Postura 3',      semIni:71, semFim:999},
 ];
 function getFaseAtual(sem){return FASES_RACAO.find(f=>sem>=f.semIni&&sem<=f.semFim)||null;}
 function getProximaFase(faseId){const idx=FASES_RACAO.findIndex(f=>f.id===faseId);return idx>=0&&idx<FASES_RACAO.length-1?FASES_RACAO[idx+1]:null;}
