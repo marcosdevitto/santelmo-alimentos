@@ -378,10 +378,10 @@ function la(){ return S.lotes.filter(l=>l.ativo!==false); }
 function lp(){
   const FASES_PROD=['pico','pos1','pos2','pos3'];
   return S.lotes.filter(l=>{
-    if(l.ativo===false)return false;
+    if(l.ativo===false||l.tipo!=='gaiola')return false;
+    // Remove o limite de 26 semanas se o lote já está em fase de produção
     if(semanas(l.chegada)<26&&!FASES_PROD.includes(l.formula_fase))return false;
-    // Aparece na produtividade se for gaiola OU se estiver em fase de produção
-    return l.tipo==='gaiola'||FASES_PROD.includes(l.formula_fase);
+    return true;
   });
 }
 function ls(){ return S.lotes.filter(l=>l.ativo && l.tipo==='soltas'); }
