@@ -361,7 +361,7 @@ let S = {
   ml: {}, mo: '',
   mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
   // peso
-  peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:''},
+  peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:'', existente:null, editando:false},
   // estoque
   estoque: {itens:[], movimentos:[], novaEntrada:{ingrediente:'',qtd:'',data:HOJE}, carregado:false, editandoMov:null},
   // relatório de peso
@@ -841,12 +841,12 @@ function tPeso(){
     <div class="ibox">Selecione o tipo de pesagem e o lote. Lance cada medição individualmente — a média e o diagnóstico são calculados automaticamente.</div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;${isAve?'border-color:var(--verde);background:var(--verde-light)':'background:#FAFFF9'}" onclick="S.peso.tipo='ave';S.peso.medicoes=[];render()">
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;${isAve?'border-color:var(--verde);background:var(--verde-light)':'background:#FAFFF9'}" onclick="S.peso.tipo='ave';S.peso.medicoes=[];S.peso.existente=null;S.peso.editando=false;render();verificarPesoExistente()">
         ${isAve?`<div style="position:absolute;top:7px;right:7px;width:16px;height:16px;border-radius:50%;background:var(--verde);display:flex;align-items:center;justify-content:center;font-size:10px;color:white">✓</div>`:''}
         <div style="font-size:20px;margin-bottom:4px">🐔</div>
         <div style="font-size:13px;font-weight:500;${isAve?'color:var(--verde)':''}">Pesagem de aves</div>
       </div>
-      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;${!isAve?'border-color:#D97706;background:#FFFBEB':'background:#FAFFF9'}" onclick="S.peso.tipo='ovo';S.peso.medicoes=[];render()">
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:13px;cursor:pointer;text-align:center;${!isAve?'border-color:#D97706;background:#FFFBEB':'background:#FAFFF9'}" onclick="S.peso.tipo='ovo';S.peso.medicoes=[];S.peso.existente=null;S.peso.editando=false;render();verificarPesoExistente()">
         <div style="font-size:20px;margin-bottom:4px">🥚</div>
         <div style="font-size:13px;font-weight:500;${!isAve?'color:#D97706':''}">Pesagem de ovos</div>
       </div>
@@ -854,11 +854,11 @@ function tPeso(){
 
     <div class="row-2">
       <div class="form-group"><label>Responsável</label><input type="text" value="${S.resp}" placeholder="Seu nome" oninput="S.resp=this.value"></div>
-      <div class="form-group"><label>Data da pesagem</label><input type="date" value="${p.data}" max="${HOJE}" oninput="S.peso.data=this.value"></div>
+      <div class="form-group"><label>Data da pesagem</label><input type="date" value="${p.data}" max="${HOJE}" oninput="S.peso.data=this.value;S.peso.existente=null;S.peso.editando=false;verificarPesoExistente()"></div>
     </div>
 
     <div class="form-group"><label>Lote</label>
-      <select onchange="S.peso.loteId=this.value;S.peso.medicoes=[];render()">
+      <select onchange="S.peso.loteId=this.value;S.peso.medicoes=[];S.peso.existente=null;S.peso.editando=false;render();verificarPesoExistente()">
         <option value="">— selecione o lote —</option>
         ${la().map(l=>{const s=semanas(l.chegada);const f=s<=18?'Recria':'Produção';return`<option value="${l.id}"${p.loteId===l.id?' selected':''}>${l.nome} — ${l.gen} · ${s}sem (${f})</option>`}).join('')}
       </select>
@@ -876,6 +876,54 @@ function tPeso(){
       </div>
     </div>
 
+    ${p.existente&&!p.editando?`
+    <div style="border:1.5px solid #FDE68A;border-radius:10px;padding:12px 14px;background:#FFFBEB;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:#92400E">📋 Pesagem já registrada nesta data</div>
+        <button onclick="abrirEdicaoPeso()" style="padding:5px 13px;border:1px solid #D97706;border-radius:7px;background:white;color:#D97706;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit">✏ Editar medições</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+        ${[
+          {v:p.existente.total_medicoes||p.existente.medicoes?.length||0,l:'Medições'},
+          {v:(p.existente.media?.toFixed(1)||'—')+'g',l:'Média'},
+          {v:media&&ideal?classifyDev(p.existente.media,ideal,isRecria&&isAve)?.label||'—':'—',l:'vs. ideal'},
+        ].map(s=>`<div style="background:white;border-radius:7px;padding:8px 10px;text-align:center;border:0.5px solid #FDE68A">
+          <div style="font-size:16px;font-weight:500;font-family:var(--mono)">${s.v}</div>
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">${s.l}</div>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:11px;color:#92400E;font-weight:500;margin-bottom:6px">Medições registradas:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${(p.existente.medicoes||[]).slice(0,12).map(m=>`<span style="font-size:11px;padding:3px 8px;border-radius:6px;background:white;border:0.5px solid #FDE68A;font-family:var(--mono);color:var(--muted)">${parseFloat(m.val??m).toFixed(1)}</span>`).join('')}
+        ${(p.existente.medicoes||[]).length>12?`<span style="font-size:11px;color:var(--muted);padding:3px 4px">+${(p.existente.medicoes||[]).length-12} mais…</span>`:''}
+      </div>
+    </div>`:''}
+
+    ${p.editando?`
+    <div style="border:1.5px solid #D97706;border-radius:10px;background:#FFFBEB;overflow:hidden;margin-bottom:14px">
+      <div style="padding:10px 14px;border-bottom:0.5px solid #FDE68A;background:#FEF3C7;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#92400E">✏ Editando medições — ${lote.nome} · ${isAve?'aves':'ovos'}</div>
+          <div style="font-size:11px;color:#92400E;margin-top:2px">Corrija valores, × para remover, + para adicionar</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;padding:12px 14px">
+        ${p.medicoes.map((m,i)=>`<div style="position:relative">
+          <input type="number" step="0.1" value="${m.val}"
+            style="width:100%;padding:7px 22px 7px 8px;border:1px solid #FDE68A;border-radius:7px;font-size:13px;font-family:var(--mono);text-align:center;background:white"
+            onchange="editPeso(${m.id},this.value)">
+          <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--muted);pointer-events:none">g</span>
+          <button onclick="delPeso(${m.id})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:#DC2626;color:white;border:none;font-size:10px;cursor:pointer;line-height:16px;text-align:center">×</button>
+        </div>`).join('')}
+        <button onclick="addPesoEdit()" style="border:1px dashed #FDE68A;border-radius:7px;padding:7px;font-size:12px;color:var(--muted);background:transparent;cursor:pointer;width:100%;text-align:center">+ adicionar</button>
+      </div>
+      <div style="padding:10px 14px;border-top:0.5px solid #FDE68A;display:flex;gap:8px;justify-content:flex-end;background:#FEF3C7">
+        <button onclick="cancelarEdicaoPeso()" style="padding:7px 14px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit">Cancelar</button>
+        <button onclick="salvarEdicaoPeso()" style="padding:7px 16px;border:none;background:#1B4D35;color:white;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">Salvar correção</button>
+      </div>
+    </div>`:''}
+
+    ${!p.existente&&!p.editando?`
     <div class="stitle">Medições — g/${isAve?'ave':'ovo'}</div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px">
       <input id="inp-peso" type="number" min="0" step="0.1"
@@ -933,7 +981,66 @@ function tPeso(){
     <div style="text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;border:1px dashed var(--verde-border);border-radius:8px">
       Nenhuma medição ainda.<br>Digite um peso e pressione <strong>Enter</strong> ou clique em "+ Adicionar".
     </div>`}
+    `:''}
     `:`<div class="ibox">Selecione um lote para começar o lançamento.</div>`}`;
+}
+
+async function verificarPesoExistente(){
+  const p=S.peso;
+  if(!p.loteId||!p.data)return;
+  const docId=`${p.data}_${p.loteId}_${p.tipo}`;
+  try{
+    const doc=await db.collection('peso').doc(docId).get();
+    if(doc.exists){
+      S.peso.existente={id:docId,...doc.data()};
+    }else{
+      S.peso.existente=null;
+    }
+    render();
+  }catch(e){}
+}
+
+function abrirEdicaoPeso(){
+  const ex=S.peso.existente;
+  if(!ex)return;
+  // Carrega as medições existentes para edição
+  const meds=(ex.medicoes||[]).map((m,i)=>({id:i+1,val:String(parseFloat(m.val??m))}));
+  S.peso.medicoes=meds;
+  S.peso.nextId=meds.length+1;
+  S.peso.editando=true;
+  render();
+}
+
+function cancelarEdicaoPeso(){
+  S.peso.medicoes=[];
+  S.peso.editando=false;
+  render();
+}
+
+function addPesoEdit(){
+  S.peso.medicoes.push({id:S.peso.nextId++,val:''});
+  render();
+}
+
+async function salvarEdicaoPeso(){
+  const p=S.peso;
+  if(!p.existente?.id)return;
+  const meds=p.medicoes.filter(m=>parseFloat(m.val)>0).map(m=>({val:String(parseFloat(m.val))}));
+  if(!meds.length)return alert('Adicione ao menos uma medição válida.');
+  const vals=meds.map(m=>parseFloat(m.val));
+  const media=vals.reduce((a,b)=>a+b,0)/vals.length;
+  try{
+    await db.collection('peso').doc(p.existente.id).update({
+      medicoes:meds,
+      media,
+      total_medicoes:meds.length,
+    });
+    toast(`✓ Pesagem corrigida — ${meds.length} medições · média ${media.toFixed(1)}g`);
+    S.peso.existente={...S.peso.existente,medicoes:meds,media,total_medicoes:meds.length};
+    S.peso.medicoes=[];
+    S.peso.editando=false;
+    render();
+  }catch(e){toast('Erro: '+e.message,false);}
 }
 
 function addPeso(){
