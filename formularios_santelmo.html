@@ -957,25 +957,37 @@ function tPeso(){
       </table>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      <div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Medições</div>
-        <div style="font-size:20px;font-weight:500">${p.medicoes.length}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${isAve?'aves':'ovos'}</div>
-      </div>
-      <div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Média geral</div>
-        <div style="font-size:20px;font-weight:500">${media?media.toFixed(1):'—'}<span style="font-size:13px;font-weight:400">g</span></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">peso médio</div>
-      </div>
-      <div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">vs. ideal</div>
-        <div class="${diffMedia?.cls||'dev-neutro'}" style="font-size:16px">${diffMedia?.label||'—'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${idealTxt}</div>
-      </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      ${(()=>{
+        const minV=vals.length?Math.min(...vals):null;
+        const maxV=vals.length?Math.max(...vals):null;
+        const limInf=media?media*0.9:null;
+        const limSup=media?media*1.1:null;
+        const dentro=vals.filter(v=>limInf&&limSup&&v>=limInf&&v<=limSup).length;
+        const unifPct=vals.length?Math.round(dentro/vals.length*100):null;
+        const unifCor=unifPct===null?'var(--muted)':unifPct>=80?'var(--verde)':unifPct>=70?'#D97706':'#DC2626';
+        return[
+          {v:maxV?maxV.toFixed(1)+'g':'—',l:'Peso máximo',c:'var(--verde)'},
+          {v:minV?minV.toFixed(1)+'g':'—',l:'Peso mínimo',c:'#DC2626'},
+          {v:media?media.toFixed(1)+'g':'—',l:'Média',c:'var(--ink)'},
+        ].map(s=>`<div style="background:var(--verde-light);border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">${s.l}</div>
+          <div style="font-size:18px;font-weight:500;color:${s.c}">${s.v}</div>
+        </div>`).join('')+
+        (isAve?`<div style="grid-column:1/-1;background:var(--verde-light);border-radius:8px;padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:11px;color:var(--muted);white-space:nowrap">Uniformidade</div>
+            <div style="flex:1;height:7px;background:rgba(0,0,0,.08);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${unifPct||0}%;background:${unifCor};border-radius:4px"></div>
+            </div>
+            <div style="font-size:14px;font-weight:600;font-family:var(--mono);color:${unifCor};white-space:nowrap">${unifPct!==null?unifPct+'%':'—'}</div>
+            <div style="font-size:11px;color:var(--muted);white-space:nowrap">${vals.length?`${dentro}/${vals.length} aves`:''}</div>
+          </div>
+        </div>`:'');
+      })()}
     </div>
 
-    <button class="btn-sub" style="background:${isAve?'var(--verde)':'#D97706'}" onclick="subPeso()">
+    <button class="btn-sub" style="background:${isAve?'var(--verde)':'#D97706'}" onclick="abrirConfirmacaoPeso()">
       Registrar pesagem — ${lote.nome} (${p.medicoes.length} medições)
     </button>`:`
     <div style="text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;border:1px dashed var(--verde-border);border-radius:8px">
@@ -1054,6 +1066,111 @@ function addPeso(){
 function delPeso(id){S.peso.medicoes=S.peso.medicoes.filter(m=>m.id!==id);render();}
 function editPeso(id,val){const m=S.peso.medicoes.find(m=>m.id===id);if(m)m.val=val;}
 
+function abrirConfirmacaoPeso(){
+  const p=S.peso;
+  if(!p.loteId||!p.medicoes.length)return;
+  const lote=S.lotes.find(l=>l.id===p.loteId);
+  const sem=lote?semanas(lote.chegada):null;
+  const isAve=p.tipo==='ave';
+  const isRecria=sem!==null&&sem<=18;
+  const ideal=lote?getIdealPeso(lote.gen,sem,p.tipo):null;
+  const vals=p.medicoes.map(m=>parseFloat(m.val)).filter(v=>!isNaN(v)&&v>0);
+  if(!vals.length)return alert('Adicione ao menos uma medição válida.');
+  const media=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const minV=Math.min(...vals);
+  const maxV=Math.max(...vals);
+
+  // Uniformidade ±10% (só aves)
+  const limInf=media*0.9,limSup=media*1.1;
+  const dentro=vals.filter(v=>v>=limInf&&v<=limSup).length;
+  const unifPct=Math.round(dentro/vals.length*100);
+  const unifCor=unifPct>=80?'#1B4D35':unifPct>=70?'#D97706':'#DC2626';
+
+  // Detecta suspeitos
+  const RANGE=isAve?{min:500,max:4000}:{min:40,max:90};
+  const DESVIO=0.4;
+  const suspeitos=p.medicoes.filter(m=>{
+    const v=parseFloat(m.val);
+    if(isNaN(v)||v<=0)return true;
+    if(v<RANGE.min||v>RANGE.max)return true;
+    if(vals.length>=3&&Math.abs(v-media)/media>DESVIO)return true;
+    return false;
+  });
+
+  // Diff vs ideal
+  const diffMedia=ideal?classifyDev(media,ideal,isRecria&&isAve):null;
+
+  const temSuspeito=suspeitos.length>0;
+  const corBtn=temSuspeito?'#D97706':'var(--verde)';
+  const txtBtn=temSuspeito?'⚠ Salvar mesmo assim':'✓ Confirmar e salvar';
+
+  document.getElementById('conf-peso-body').innerHTML=`
+    <div style="font-size:15px;font-weight:500;margin-bottom:3px">Confirmar lançamento de pesagem</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${lote?.nome||''} · ${lote?.gen||''} · ${isAve?'aves':'ovos'} · ${new Date(p.data+'T12:00:00').toLocaleDateString('pt-BR')} · sem ${sem}</div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px">
+      ${[
+        {v:p.medicoes.length,l:'Medições',c:'var(--ink)'},
+        {v:minV.toFixed(1)+'g',l:'Peso mínimo',c:'#DC2626'},
+        {v:maxV.toFixed(1)+'g',l:'Peso máximo',c:'#1B4D35'},
+        {v:media.toFixed(1)+'g',l:'Média',c:'var(--ink)'},
+        ...(isAve?[
+          {v:unifPct+'%',l:'Uniformidade',c:unifCor},
+          {v:`${dentro}/${vals.length}`,l:'Aves dentro',c:unifCor},
+        ]:[]),
+      ].map(s=>`<div style="background:var(--bg);border-radius:8px;padding:9px 10px;text-align:center">
+        <div style="font-size:16px;font-weight:500;font-family:var(--mono);color:${s.c}">${s.v}</div>
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px">${s.l}</div>
+      </div>`).join('')}
+    </div>
+
+    ${diffMedia?`<div style="background:var(--bg);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:var(--muted)">
+      vs. ideal (${(() => {
+        let it='—';
+        if(ideal){if(isAve&&isRecria&&ideal.max!==undefined)it=`${ideal.min}g – ${ideal.max}g`;
+        else it=`≥ ${ideal.min}g`;}return it;
+      })()}) · <span class="${diffMedia.cls}" style="font-weight:600">${diffMedia.label}</span>
+    </div>`:''}
+
+    ${temSuspeito?`<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:8px">⚠ Valores suspeitos — revise antes de salvar</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${suspeitos.map(m=>{
+          const v=parseFloat(m.val);
+          let why='';
+          if(v<RANGE.min||v>RANGE.max)why=`fora do intervalo esperado (${RANGE.min}–${RANGE.max}g)`;
+          else why=`desvia ${Math.round(Math.abs(v-media)/media*100)}% da média (${media.toFixed(1)}g)`;
+          return`<div style="display:flex;align-items:center;justify-content:space-between;background:white;border-radius:6px;padding:6px 10px;border:0.5px solid #FDE68A">
+            <div>
+              <div style="font-family:var(--mono);font-weight:500;font-size:13px;color:#92400E">${v.toFixed(1)}g</div>
+              <div style="font-size:11px;color:#92400E;margin-top:1px">${why}</div>
+            </div>
+            <button onclick="removerMedicaoConf(${m.id})" style="font-size:11px;color:#DC2626;border:none;background:none;cursor:pointer;font-family:inherit;text-decoration:underline">remover</button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:''}
+
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharConfirmacaoPeso()" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit">← Corrigir</button>
+      <button onclick="subPeso()" style="flex:2;padding:10px;border:none;background:${corBtn};color:white;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">${txtBtn}</button>
+    </div>`;
+
+  document.getElementById('modal-conf-peso').style.display='flex';
+  document.body.style.overflow='hidden';
+}
+
+function fecharConfirmacaoPeso(){
+  document.getElementById('modal-conf-peso').style.display='none';
+  document.body.style.overflow='';
+}
+
+function removerMedicaoConf(id){
+  S.peso.medicoes=S.peso.medicoes.filter(m=>m.id!==id);
+  fecharConfirmacaoPeso();
+  abrirConfirmacaoPeso(); // reabre com dados atualizados
+}
+
 async function subPeso(){
   if(!S.resp)return alert('Informe o responsável.');
   if(!S.peso.loteId)return alert('Selecione o lote.');
@@ -1083,7 +1200,8 @@ async function subPeso(){
       total_medicoes:vals.length,
     });
     toast(`✓ Pesagem registrada! Média: ${media.toFixed(1)}g`);
-    S.peso={tipo:p.tipo,loteId:'',data:HOJE,medicoes:[],nextId:1,inputVal:''};
+    fecharConfirmacaoPeso();
+    S.peso={tipo:p.tipo,loteId:'',data:HOJE,medicoes:[],nextId:1,inputVal:'',existente:null,editando:false};
     render();
   }catch(e){toast('Erro: '+e.message,false);}
 }
@@ -2458,7 +2576,12 @@ function sair(){
   if(confirm('Deseja sair?')) auth.signOut();
 }
 </script>
-<!-- MODAL CORREÇÃO DE FASE -->
+<!-- MODAL CONFIRMAÇÃO PESAGEM -->
+<div id="modal-conf-peso" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)fecharConfirmacaoPeso()">
+  <div style="background:var(--card);border-radius:14px;padding:20px;width:min(460px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div id="conf-peso-body"></div>
+  </div>
+</div>
 <div id="modal-correcao-fase" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)fecharCorrecaoFase()">
   <div style="background:var(--card);border-radius:14px;padding:20px;width:min(420px,100%);box-shadow:0 8px 32px rgba(0,0,0,.2)">
     <div style="font-size:15px;font-weight:500;margin-bottom:4px">Corrigir fase da fórmula</div>
