@@ -598,7 +598,7 @@ function makePesoValPlugin(gen){
 }
 
 function buildTabelaPeso(arr, tp, gen){
-  if(!arr.length) return`<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--muted);font-style:italic;font-size:11px">sem coletas</td></tr>`;
+  if(!arr.length) return`<tr><td colspan="6" style="text-align:center;padding:10px;color:var(--muted);font-style:italic;font-size:11px">sem coletas</td></tr>`;
   return[...arr].slice(0,10).map(rec=>{
     const chegada=META[rec.lote]?.chegada;
     let sem=rec.semanas;
@@ -612,12 +612,25 @@ function buildTabelaPeso(arr, tp, gen){
     const st=getPtStatus(rec.media,gen,sem,tp);
     const dc=diffColor(st);
     const isRec=sem<=18&&tp==='ave';
+    // Uniformidade ±10%
+    let unifHtml='—';
+    if(tp==='ave'){
+      const meds=(rec.medicoes||[]).map(m=>parseFloat(m.val??m)).filter(v=>!isNaN(v)&&v>0);
+      if(meds.length>0&&rec.media){
+        const limInf=rec.media*0.9,limSup=rec.media*1.1;
+        const dentro=meds.filter(v=>v>=limInf&&v<=limSup).length;
+        const pct=Math.round(dentro/meds.length*100);
+        const cor=pct>=80?'var(--text-success)':pct>=70?'#D97706':'var(--text-danger)';
+        unifHtml=`<span style="font-weight:600;color:${cor}">${pct}%</span>`;
+      }
+    }
     return`<tr>
       <td style="color:var(--muted);font-size:11px">${fmtBRAnno(rec.dataObj)}</td>
       <td class="mono" style="font-size:10px;color:var(--muted)">${sem}${isRec?`<span class="peso-rec">rec</span>`:''}</td>
       <td class="mono" style="font-weight:500">${rec.media?.toFixed(1)}g</td>
       <td class="mono" style="font-size:10px;color:var(--muted)">${idealTxtLocal(id,tp,sem)}</td>
       <td class="mono" style="font-weight:600;color:${dc}">${diffTxtLocal(rec.media,id,tp,sem)}</td>
+      <td class="mono" style="font-size:11px;text-align:right">${unifHtml}</td>
     </tr>`;
   }).join('');
 }
@@ -668,7 +681,7 @@ function renderPesoCurves(pesoDados){
           <div class="peso-leg-item" style="font-style:italic;margin-left:4px">● ave · ▲ ovo</div>
         </div>
         <table class="peso-tbl">
-          <thead><tr><th>Data</th><th>Sem.</th><th>Média</th><th>Ideal</th><th>Diferença</th></tr></thead>
+          <thead><tr><th>Data</th><th>Sem.</th><th>Média</th><th>Ideal</th><th>Diferença</th><th style="text-align:right">Unif. ±10%</th></tr></thead>
           <tbody>
             <tr><td colspan="5" class="peso-sec" style="color:#b45309">🥚 Ovos</td></tr>
             ${buildTabelaPeso(porLote[id].ovo,'ovo',gen)}
