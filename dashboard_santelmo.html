@@ -620,7 +620,7 @@ function buildTabelaPeso(arr, tp, gen){
         const limInf=rec.media*0.9,limSup=rec.media*1.1;
         const dentro=meds.filter(v=>v>=limInf&&v<=limSup).length;
         const pct=Math.round(dentro/meds.length*100);
-        const cor=pct>=80?'var(--text-success)':pct>=70?'#D97706':'var(--text-danger)';
+        const cor=pct>=80?'#1B4D35':pct>=70?'#D97706':'#DC2626';
         unifHtml=`<span style="font-weight:600;color:${cor}">${pct}%</span>`;
       }
     }
