@@ -361,7 +361,7 @@ let S = {
   ml: {}, mo: '',
   mt: {galpao_producao:{max:'',min:''},galpao_galinhas_soltas:{max:'',min:''},galpao_recria:{max:'',min:''}},
   // peso
-  peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:'', existente:null, editando:false},
+  peso: {tipo:'ave', loteId:'', data:HOJE, medicoes:[], nextId:1, inputVal:'', existente:null, editando:false, rascunho:null},
   // estoque
   estoque: {itens:[], movimentos:[], novaEntrada:{ingrediente:'',qtd:'',data:HOJE}, carregado:false, editandoMov:null},
   // relatório de peso
@@ -455,7 +455,7 @@ async function ST(i){
   if(i===7){ await carregarFormulas(); }
   if(i===8){ await carregarEstoque(); }
   if(i===9){ await carregarRelPeso(); }
-  if(i===5){ await carregarFormulas(); } // Config. Lotes precisa das fórmulas para mostrar variações
+  if(i===4){ verificarRascunhoPeso(); }
   render();
 }
 
@@ -817,6 +817,29 @@ function t3(){
 // ── TAB PESO ──────────────────────────────────────────────────────────────────
 function tPeso(){
   const p=S.peso;
+
+  // Banner de rascunho salvo
+  let rascunhoHtml='';
+  if(p.rascunho){
+    const r=p.rascunho;
+    const lote=S.lotes.find(l=>l.id===r.loteId);
+    const dt=new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR');
+    const diff=Math.round((Date.now()-r.ts)/60000);
+    const ago=diff<2?'agora mesmo':diff<60?`${diff} min atrás`:`${Math.round(diff/60)}h atrás`;
+    rascunhoHtml=`<div style="border:1.5px solid #3B82F6;border-radius:10px;padding:12px 14px;background:#EFF6FF;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#1E40AF;margin-bottom:3px">💾 Rascunho não salvo encontrado</div>
+          <div style="font-size:12px;color:#1D4ED8">${lote?.nome||r.loteId} · ${r.tipo==='ave'?'aves':'ovos'} · ${dt} · ${r.medicoes.length} medições</div>
+          <div style="font-size:11px;color:#93C5FD;margin-top:2px">salvo ${ago}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button onclick="recuperarRascunhoPeso()" style="padding:6px 12px;border:none;background:#3B82F6;color:white;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit">Recuperar</button>
+          <button onclick="descartarRascunhoPeso()" style="padding:6px 10px;border:1px solid #BFDBFE;background:transparent;color:#3B82F6;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">Descartar</button>
+        </div>
+      </div>
+    </div>`;
+  }
   const lote=S.lotes.find(l=>l.id===p.loteId)||null;
   const sem=lote?semanas(lote.chegada):null;
   const isRecria=sem!==null&&sem<=18;
@@ -838,6 +861,7 @@ function tPeso(){
   const diffMedia=media&&ideal?classifyDev(media,ideal,isRecria&&isAve):null;
 
   return`
+    ${rascunhoHtml}
     <div class="ibox">Selecione o tipo de pesagem e o lote. Lance cada medição individualmente — a média e o diagnóstico são calculados automaticamente.</div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
@@ -957,6 +981,8 @@ function tPeso(){
       </table>
     </div>
 
+    ${p.medicoes.length>0?`<div style="font-size:10px;color:#3B82F6;text-align:right;margin:-8px 0 8px;font-family:var(--mono)">💾 rascunho salvo automaticamente</div>`:''}
+
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
       ${(()=>{
         const minV=vals.length?Math.min(...vals):null;
@@ -1055,16 +1081,67 @@ async function salvarEdicaoPeso(){
   }catch(e){toast('Erro: '+e.message,false);}
 }
 
+// ── RASCUNHO DE PESAGEM (localStorage) ───────────────────────────────────────
+const RASCUNHO_KEY='santelmo_peso_rascunho';
+
+function salvarRascunhoPeso(){
+  try{
+    const p=S.peso;
+    if(!p.loteId||!p.medicoes.length)return;
+    localStorage.setItem(RASCUNHO_KEY,JSON.stringify({
+      loteId:p.loteId,data:p.data,tipo:p.tipo,
+      medicoes:p.medicoes,nextId:p.nextId,
+      ts:Date.now(),
+    }));
+  }catch(e){}
+}
+
+function verificarRascunhoPeso(){
+  try{
+    const raw=localStorage.getItem(RASCUNHO_KEY);
+    if(!raw)return;
+    const d=JSON.parse(raw);
+    // Descarta rascunhos com mais de 24h
+    if(Date.now()-d.ts>86400000){localStorage.removeItem(RASCUNHO_KEY);return;}
+    S.peso.rascunho=d;
+    render();
+  }catch(e){}
+}
+
+function recuperarRascunhoPeso(){
+  const d=S.peso.rascunho;
+  if(!d)return;
+  S.peso.loteId=d.loteId;
+  S.peso.data=d.data;
+  S.peso.tipo=d.tipo;
+  S.peso.medicoes=d.medicoes;
+  S.peso.nextId=d.nextId;
+  S.peso.rascunho=null;
+  toast('✓ Rascunho recuperado — '+d.medicoes.length+' medições');
+  render();
+}
+
+function descartarRascunhoPeso(){
+  try{localStorage.removeItem(RASCUNHO_KEY);}catch(e){}
+  S.peso.rascunho=null;
+  render();
+}
+
+function limparRascunhoPeso(){
+  try{localStorage.removeItem(RASCUNHO_KEY);}catch(e){}
+}
+
 function addPeso(){
   const v=parseFloat(S.peso.inputVal);
   if(isNaN(v)||v<=0){document.getElementById('inp-peso')?.focus();return;}
   S.peso.medicoes.push({id:S.peso.nextId++,val:String(v)});
   S.peso.inputVal='';
+  salvarRascunhoPeso();
   render();
   setTimeout(()=>{const el=document.getElementById('inp-peso');if(el){el.value='';el.focus();}},10);
 }
-function delPeso(id){S.peso.medicoes=S.peso.medicoes.filter(m=>m.id!==id);render();}
-function editPeso(id,val){const m=S.peso.medicoes.find(m=>m.id===id);if(m)m.val=val;}
+function delPeso(id){S.peso.medicoes=S.peso.medicoes.filter(m=>m.id!==id);salvarRascunhoPeso();render();}
+function editPeso(id,val){const m=S.peso.medicoes.find(m=>m.id===id);if(m){m.val=val;salvarRascunhoPeso();}}
 
 function abrirConfirmacaoPeso(){
   const p=S.peso;
@@ -1086,16 +1163,16 @@ function abrirConfirmacaoPeso(){
   const unifPct=Math.round(dentro/vals.length*100);
   const unifCor=unifPct>=80?'#1B4D35':unifPct>=70?'#D97706':'#DC2626';
 
-  // Detecta suspeitos
-  const RANGE=isAve?{min:500,max:4000}:{min:40,max:90};
-  const DESVIO=0.4;
-  const suspeitos=p.medicoes.filter(m=>{
-    const v=parseFloat(m.val);
-    if(isNaN(v)||v<=0)return true;
-    if(v<RANGE.min||v>RANGE.max)return true;
-    if(vals.length>=3&&Math.abs(v-media)/media>DESVIO)return true;
-    return false;
-  });
+  // Detecta suspeitos — baseado no desvio da média parcial da coleta
+  // Só ativa a partir de 4 medições para a média ser representativa
+  const DESVIO=0.5; // 50% acima ou abaixo da média
+  const suspeitos=vals.length>=4
+    ?p.medicoes.filter(m=>{
+        const v=parseFloat(m.val);
+        if(isNaN(v)||v<=0)return true;
+        return Math.abs(v-media)/media>DESVIO;
+      })
+    :[];
 
   // Diff vs ideal
   const diffMedia=ideal?classifyDev(media,ideal,isRecria&&isAve):null;
@@ -1138,8 +1215,8 @@ function abrirConfirmacaoPeso(){
         ${suspeitos.map(m=>{
           const v=parseFloat(m.val);
           let why='';
-          if(v<RANGE.min||v>RANGE.max)why=`fora do intervalo esperado (${RANGE.min}–${RANGE.max}g)`;
-          else why=`desvia ${Math.round(Math.abs(v-media)/media*100)}% da média (${media.toFixed(1)}g)`;
+          if(isNaN(v)||v<=0)why='valor inválido';
+          else why=`desvia ${Math.round(Math.abs(v-media)/media*100)}% da média da coleta (${media.toFixed(1)}g)`;
           return`<div style="display:flex;align-items:center;justify-content:space-between;background:white;border-radius:6px;padding:6px 10px;border:0.5px solid #FDE68A">
             <div>
               <div style="font-family:var(--mono);font-weight:500;font-size:13px;color:#92400E">${v.toFixed(1)}g</div>
@@ -1200,6 +1277,7 @@ async function subPeso(){
       total_medicoes:vals.length,
     });
     toast(`✓ Pesagem registrada! Média: ${media.toFixed(1)}g`);
+    limparRascunhoPeso();
     fecharConfirmacaoPeso();
     S.peso={tipo:p.tipo,loteId:'',data:HOJE,medicoes:[],nextId:1,inputVal:'',existente:null,editando:false};
     render();
