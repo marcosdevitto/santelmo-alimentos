@@ -477,6 +477,9 @@ async function corrigirProd(){
       S.prod['f_'+id]=v.frente??'';
       S.prod['m_'+id]=v.meio??'';
       S.prod['b_'+id]=v.fundo??'';
+      S.prod['gf_'+id]=v.gaiolas_frente??localStorage.getItem('sg_gf_'+id)??'';
+      S.prod['gm_'+id]=v.gaiolas_meio??localStorage.getItem('sg_gm_'+id)??'';
+      S.prod['gb_'+id]=v.gaiolas_fundo??localStorage.getItem('sg_gb_'+id)??'';
     });
   }
   S.override_prod=true; render();
@@ -542,24 +545,52 @@ function t0(){
     </div>
     ${trava?travaCaixa(S.jaLancado.prod,'Já existe lançamento para esta data','corrigirProd()'):`
       <div class="stitle">Contagem de ovos por lote</div>
-      <div class="ibox" style="font-size:11px">Produção % = (Frente + Meio + Fundo) ÷ 360 × 100</div>
+      <div class="ibox" style="font-size:11px">Produção % = Total de ovos ÷ (Total de gaiolas × 15) × 100</div>
       ${S.override_prod&&S.jaLancado.prod?`<div style="background:var(--amber-light);border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Corrigindo lançamento existente.</div>`:''}
       ${lps.map(l=>{
         const f=S.prod['f_'+l.id]??'';
         const m=S.prod['m_'+l.id]??'';
         const b=S.prod['b_'+l.id]??'';
+        const gf=S.prod['gf_'+l.id]??localStorage.getItem('sg_gf_'+l.id)??'';
+        const gm=S.prod['gm_'+l.id]??localStorage.getItem('sg_gm_'+l.id)??'';
+        const gb=S.prod['gb_'+l.id]??localStorage.getItem('sg_gb_'+l.id)??'';
+        if(S.prod['gf_'+l.id]===undefined&&gf)S.prod['gf_'+l.id]=gf;
+        if(S.prod['gm_'+l.id]===undefined&&gm)S.prod['gm_'+l.id]=gm;
+        if(S.prod['gb_'+l.id]===undefined&&gb)S.prod['gb_'+l.id]=gb;
         const fv=parseFloat(f);const mv=parseFloat(m);const bv=parseFloat(b);
-        const totalPreview=(!isNaN(fv)&&!isNaN(mv)&&!isNaN(bv))?(fv+mv+bv):null;
-        const pctPreview=totalPreview!==null?(totalPreview/360*100).toFixed(2):null;
+        const gfv=parseFloat(gf);const gmv=parseFloat(gm);const gbv=parseFloat(gb);
+        const totalOvos=(!isNaN(fv)&&!isNaN(mv)&&!isNaN(bv))?(fv+mv+bv):null;
+        const totalGaiolas=(!isNaN(gfv)&&!isNaN(gmv)&&!isNaN(gbv))?(gfv+gmv+gbv):null;
+        const denominador=totalGaiolas!==null?totalGaiolas*15:null;
+        const pctPreview=(totalOvos!==null&&denominador)?(totalOvos/denominador*100).toFixed(2):null;
+        const pctColor=pctPreview===null?'var(--verde)':(parseFloat(pctPreview)>=85?'var(--verde)':parseFloat(pctPreview)>=70?'#D97706':'#DC2626');
         return`<div class="prow">
           <div style="font-size:14px;font-weight:600;margin-bottom:2px">${l.nome}</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${l.gen} · ${semanas(l.chegada)} semanas</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-            <div><label style="font-size:11px;margin-bottom:3px;display:block;color:#1D4ED8;font-weight:600">Frente</label><input id="pf_${l.id}" type="number" min="0" max="120" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value;render()"></div>
-            <div><label style="font-size:11px;margin-bottom:3px;display:block;color:#1D4ED8;font-weight:600">Meio</label><input id="pm_${l.id}" type="number" min="0" max="120" placeholder="0" value="${m}" oninput="S.prod['m_${l.id}']=this.value;render()"></div>
-            <div><label style="font-size:11px;margin-bottom:3px;display:block;color:#1D4ED8;font-weight:600">Fundo</label><input id="pb_${l.id}" type="number" min="0" max="120" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value;render()"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">
+            <div>
+              <label style="font-size:11px;margin-bottom:2px;display:block;color:#1D4ED8;font-weight:600">Frente — ovos</label>
+              <input id="pf_${l.id}" type="number" min="0" max="120" placeholder="0" value="${f}" oninput="S.prod['f_${l.id}']=this.value;render()">
+              <label style="font-size:10px;margin:3px 0 2px;display:block;color:#64748B">Gaiolas</label>
+              <input id="pgf_${l.id}" type="number" min="0" placeholder="0" value="${gf}" oninput="S.prod['gf_${l.id}']=this.value;render()">
+            </div>
+            <div>
+              <label style="font-size:11px;margin-bottom:2px;display:block;color:#1D4ED8;font-weight:600">Meio — ovos</label>
+              <input id="pm_${l.id}" type="number" min="0" max="120" placeholder="0" value="${m}" oninput="S.prod['m_${l.id}']=this.value;render()">
+              <label style="font-size:10px;margin:3px 0 2px;display:block;color:#64748B">Gaiolas</label>
+              <input id="pgm_${l.id}" type="number" min="0" placeholder="0" value="${gm}" oninput="S.prod['gm_${l.id}']=this.value;render()">
+            </div>
+            <div>
+              <label style="font-size:11px;margin-bottom:2px;display:block;color:#1D4ED8;font-weight:600">Fundo — ovos</label>
+              <input id="pb_${l.id}" type="number" min="0" max="120" placeholder="0" value="${b}" oninput="S.prod['b_${l.id}']=this.value;render()">
+              <label style="font-size:10px;margin:3px 0 2px;display:block;color:#64748B">Gaiolas</label>
+              <input id="pgb_${l.id}" type="number" min="0" placeholder="0" value="${gb}" oninput="S.prod['gb_${l.id}']=this.value;render()">
+            </div>
           </div>
-          ${totalPreview!==null?`<div style="background:var(--verde-light);border:1px solid var(--verde-border);border-radius:6px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--muted)">Total: <strong style="color:var(--ink)">${totalPreview} ovos</strong></span><span style="font-size:14px;font-weight:600;color:var(--verde)">${pctPreview}%</span></div>`:''}
+          ${(totalOvos!==null&&totalGaiolas!==null)?`<div style="background:var(--verde-light);border:1px solid var(--verde-border);border-radius:6px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--muted)">Total: <strong style="color:var(--ink)">${totalOvos} ovos</strong> · <strong style="color:var(--ink)">${totalGaiolas} gaiolas</strong> · <strong style="color:var(--ink)">${denominador} aves</strong></span>
+            <span style="font-size:14px;font-weight:600;color:${pctColor}">${pctPreview}%</span>
+          </div>`:''}
         </div>`;
       }).join('')}
       <button class="btn-sub" onclick="subProd()">Registrar produtividade</button>`}`;
@@ -1498,13 +1529,21 @@ async function subProd(){
   for(const l of lp()){
     if((S.prod['f_'+l.id]??'')==''||(S.prod['m_'+l.id]??'')==''||(S.prod['b_'+l.id]??'')=='')
       return alert(`Preencha frente, meio e fundo do ${l.nome}.`);
+    if((S.prod['gf_'+l.id]??'')==''||(S.prod['gm_'+l.id]??'')==''||(S.prod['gb_'+l.id]??'')=='')
+      return alert(`Preencha o número de gaiolas (frente, meio e fundo) do ${l.nome}.`);
   }
   const lotes={};
   lp().forEach(l=>{
     const f=parseInt(S.prod['f_'+l.id]);
     const m=parseInt(S.prod['m_'+l.id]);
     const b=parseInt(S.prod['b_'+l.id]);
-    lotes[l.id]={frente:f,meio:m,fundo:b,total:f+m+b};
+    const gf=parseInt(S.prod['gf_'+l.id]);
+    const gm=parseInt(S.prod['gm_'+l.id]);
+    const gb=parseInt(S.prod['gb_'+l.id]);
+    const total=f+m+b;
+    const denominador=(gf+gm+gb)*15;
+    const pct=denominador>0?parseFloat((total/denominador*100).toFixed(2)):0;
+    lotes[l.id]={frente:f,meio:m,fundo:b,gaiolas_frente:gf,gaiolas_meio:gm,gaiolas_fundo:gb,total,denominador,pct};
   });
   try{
     await db.collection('produtividade').doc(S.pd).set({
@@ -1512,6 +1551,12 @@ async function subProd(){
       responsavel:S.resp,
       timestamp_envio:FS.FieldValue.serverTimestamp(),
       lotes
+    });
+    // Salva gaiolas no localStorage para pré-preenchimento futuro
+    lp().forEach(l=>{
+      localStorage.setItem('sg_gf_'+l.id,S.prod['gf_'+l.id]);
+      localStorage.setItem('sg_gm_'+l.id,S.prod['gm_'+l.id]);
+      localStorage.setItem('sg_gb_'+l.id,S.prod['gb_'+l.id]);
     });
     toast('✓ Produtividade registrada!');
     S.prod={};S.override_prod=false;S.jaLancado.prod=await verificar('produtividade',S.pd);render();
